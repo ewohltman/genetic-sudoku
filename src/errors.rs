@@ -1,6 +1,7 @@
 use super::Row;
 use std::error::Error;
 use std::fmt;
+use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Clone)]
 pub enum ErrorType {
@@ -13,8 +14,14 @@ pub struct InvalidSolution {
     pub error: ErrorType,
 }
 
-impl fmt::Debug for InvalidSolution {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl InvalidSolution {
+    pub fn new(error_type: ErrorType) -> InvalidSolution {
+        InvalidSolution { error: error_type }
+    }
+}
+
+impl Debug for InvalidSolution {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match &self.error {
             ErrorType::InvalidSize(size) => writeln!(f, "Invalid size: {}", size)?,
             ErrorType::InvalidRows(rows) => {
@@ -30,34 +37,28 @@ impl fmt::Debug for InvalidSolution {
     }
 }
 
-impl fmt::Display for InvalidSolution {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self, f)
+impl Display for InvalidSolution {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Debug::fmt(&self, f)
     }
 }
 
 impl Error for InvalidSolution {}
-
-impl InvalidSolution {
-    pub fn new(error_type: ErrorType) -> InvalidSolution {
-        InvalidSolution { error: error_type }
-    }
-}
 
 #[derive(Clone)]
 pub struct InvalidRow {
     row: Row,
 }
 
-impl fmt::Debug for InvalidRow {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Debug for InvalidRow {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.row)
     }
 }
 
-impl fmt::Display for InvalidRow {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self, f)
+impl Display for InvalidRow {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Display::fmt(&self, f)
     }
 }
 
