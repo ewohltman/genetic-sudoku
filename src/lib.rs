@@ -7,7 +7,7 @@ use std::fmt::{Display, Formatter};
 
 const BOARD_SIZE: usize = 9;
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Row(pub Vec<u8>);
 
 impl Display for Row {
@@ -25,7 +25,7 @@ impl Display for Row {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Board(pub Vec<Row>);
 
 impl Board {
@@ -48,6 +48,10 @@ impl Board {
     }
 
     pub fn fitness(&self) -> u8 {
+        self.count_duplicates() + self.transpose().count_duplicates()
+    }
+
+    fn count_duplicates(&self) -> u8 {
         let mut duplicates: u8 = 0;
 
         for row in self.0.iter() {
@@ -61,6 +65,28 @@ impl Board {
         }
 
         duplicates
+    }
+
+    fn transpose(&self) -> Board {
+        let rows = &self.0;
+        let row_len = rows[0].0.len();
+        let mut transposed: Vec<Row> = Vec::with_capacity(row_len);
+
+        // Initialize the transposed rows
+        for _ in 0..row_len {
+            transposed.push(Row(Vec::<u8>::with_capacity(rows.len())));
+        }
+
+        for row in rows.iter() {
+            let row_values = row.0.iter();
+
+            // For each row value index, push row value to transposed row index
+            for (j, value) in row_values.enumerate() {
+                transposed[j].0.push(*value);
+            }
+        }
+
+        Board(transposed)
     }
 }
 
@@ -97,5 +123,48 @@ where
     match overlay.len() {
         BOARD_SIZE => base.iter().zip(overlay.iter()).map(f).collect(),
         size => Err(InvalidSolution::new(ErrorType::InvalidSize(size))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_board_fitness() {
+        let good_board = good_test_board();
+        let bad_board = bad_test_board();
+
+        assert_eq!(0, good_board.fitness());
+        assert_eq!(8, bad_board.fitness());
+    }
+
+    #[test]
+    fn test_board_transpose() {
+        let board: Board = good_test_board();
+        let expected: Board = Board(vec![
+            Row(vec![1, 2, 3]),
+            Row(vec![2, 3, 4]),
+            Row(vec![3, 4, 1]),
+            Row(vec![4, 1, 2]),
+        ]);
+
+        assert_eq!(expected, board.transpose())
+    }
+
+    fn good_test_board() -> Board {
+        Board(vec![
+            Row(vec![1, 2, 3, 4]),
+            Row(vec![2, 3, 4, 1]),
+            Row(vec![3, 4, 1, 2]),
+        ])
+    }
+
+    fn bad_test_board() -> Board {
+        Board(vec![
+            Row(vec![1, 2, 3, 4]),
+            Row(vec![1, 2, 3, 4]),
+            Row(vec![1, 2, 3, 4]),
+        ])
     }
 }
