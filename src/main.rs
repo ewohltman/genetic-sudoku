@@ -1,8 +1,12 @@
 use genetic_sudoku::{errors::InvalidSolution, Board, Row};
 use rand::rngs::ThreadRng;
 use rand::{distributions::Uniform, thread_rng, Rng};
+use std::error::Error;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::thread::JoinHandle;
 
-const TOTAL_GENERATIONS: u16 = 10000;
+const MAX_GENERATIONS: u32 = 100000;
 
 fn seed_initial_candidates(mut rng: &mut ThreadRng, uniform_range: Uniform<u8>) -> Vec<Board> {
     let mut candidates = Vec::new();
@@ -33,39 +37,50 @@ fn generate_candidate(rng: &mut ThreadRng, uniform_range: Uniform<u8>) -> Board 
 fn run_simulation(
     base: &Board,
     rng: &mut ThreadRng,
-    generation: u16,
     candidates: Vec<Board>,
-) -> Result<Option<Board>, InvalidSolution> {
-    if generation == TOTAL_GENERATIONS {
-        println!("{}", candidates[0]);
-        return Ok(None);
+) -> Result<Vec<Board>, InvalidSolution> {
+    let fitness_scores = Arc::new(Mutex::new(Vec::<(Board, u8)>::with_capacity(
+        candidates.len(),
+    )));
+    let mut threads: Vec<JoinHandle<Result<Option<Board>, InvalidSolution>>> =
+        Vec::with_capacity(candidates.len());
+
+    for candidate in candidates.into_iter() {
+        let thread_base = base.clone();
+        let thread_fitness_scores = Arc::clone(&fitness_scores);
+
+        threads.push(thread::spawn(
+            move || -> Result<Option<Board>, InvalidSolution> {
+                let solution = thread_base.overlay(&candidate)?;
+                let score = solution.fitness();
+
+                if score == 0 {
+                    return Ok(Some(solution));
+                }
+
+                thread_fitness_scores
+                    .lock()
+                    .unwrap()
+                    .push((solution, score));
+
+                Ok(None)
+            },
+        ));
     }
 
-    println!("Generation: {}", generation);
-
-    let mut fitness_scores: Vec<(Board, u8)> = Vec::new();
-
-    for candidate in candidates.iter() {
-        let solution = base.overlay(candidate)?;
-        let solution_score = solution.fitness();
-
-        if solution_score == 0 {
-            return Ok(Some(solution));
+    for handle in threads.into_iter() {
+        if let Some(solution) = handle.join().unwrap()? {
+            return Ok(vec![solution]);
         }
-
-        fitness_scores.push((solution, solution_score));
     }
 
-    let candidates = next_candidates(rng, &mut fitness_scores);
+    let fitness_scores = fitness_scores.lock().unwrap().to_vec();
 
-    if generation % 1000 == 0 {
-        println!("{}", candidates[0])
-    }
-
-    run_simulation(base, rng, generation + 1, candidates)
+    Ok(next_candidates(rng, fitness_scores))
 }
 
-fn next_candidates(rng: &mut ThreadRng, fitness_scores: &mut Vec<(Board, u8)>) -> Vec<Board> {
+fn next_candidates(rng: &mut ThreadRng, fitness_scores: Vec<(Board, u8)>) -> Vec<Board> {
+    let mut fitness_scores = fitness_scores;
     fitness_scores.sort_unstable_by_key(|key| key.1);
 
     let half = fitness_scores.len() / 2;
@@ -119,16 +134,29 @@ fn next_candidates(rng: &mut ThreadRng, fitness_scores: &mut Vec<(Board, u8)>) -
         .collect()
 }
 
-fn main() -> Result<(), InvalidSolution> {
+fn main() -> Result<(), Box<dyn Error>> {
     let base = Board::default();
     let mut rng = thread_rng();
+    let mut candidates = seed_initial_candidates(&mut rng, Uniform::from(1..10));
 
-    let candidates = seed_initial_candidates(&mut rng, Uniform::from(1..10));
+    for generation in 0..MAX_GENERATIONS {
+        if generation == MAX_GENERATIONS - 1 {
+            println!("Generation: {}\n{}", generation, candidates[0]);
+        }
 
-    match run_simulation(&base, &mut rng, 0, candidates)? {
-        Some(solution) => println!("Solution:\n{}", solution),
-        None => println!("No solution found"),
+        candidates = run_simulation(&base, &mut rng, candidates)?;
+
+        if candidates.len() == 1 {
+            println!("Solution:\n{}", candidates[0]);
+            return Ok(());
+        }
+
+        if generation % 1000 == 0 {
+            println!("Generation: {}\n{}", generation, candidates[0]);
+        }
     }
+
+    println!("No solution found");
 
     Ok(())
 }
