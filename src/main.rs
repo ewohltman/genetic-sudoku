@@ -5,8 +5,9 @@ use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
+use std::time::SystemTime;
 
-const MAX_GENERATIONS: u32 = 100000;
+const MUTATION_RATE: u8 = 5; // Percent
 
 fn seed_initial_candidates(mut rng: &mut ThreadRng, uniform_range: Uniform<u8>) -> Vec<Board> {
     let mut candidates = Vec::new();
@@ -79,13 +80,11 @@ fn run_simulation(
     Ok(next_candidates(rng, fitness_scores))
 }
 
-fn next_candidates(rng: &mut ThreadRng, fitness_scores: Vec<(Board, u8)>) -> Vec<Board> {
-    let mut fitness_scores = fitness_scores;
-    fitness_scores.sort_unstable_by_key(|key| key.1);
+fn next_candidates(rng: &mut ThreadRng, mut fitness_scores: Vec<(Board, u8)>) -> Vec<Board> {
+    fitness_scores.sort_unstable_by_key(|(_, score)| *score);
 
     let half = fitness_scores.len() / 2;
     let survivors = fitness_scores.drain(..half).map(|(survivor, _)| survivor);
-
     let mut parents_x = Vec::new();
     let mut parents_y = Vec::new();
 
@@ -97,10 +96,15 @@ fn next_candidates(rng: &mut ThreadRng, fitness_scores: Vec<(Board, u8)>) -> Vec
         };
     }
 
-    parents_x
-        .iter()
-        .zip(parents_y.iter())
-        .map(|(parent_x, parent_y)| {
+    let parents_x = parents_x.iter();
+    let parents_y = parents_y.iter();
+    let parents = parents_x.zip(parents_y);
+    let inherits_from: Uniform<u8> = Uniform::from(0..2);
+    let mutation_range: Uniform<u8> = Uniform::from(0..101);
+    let mutation_values: Uniform<u8> = Uniform::from(1..10);
+
+    parents
+        .map(|(parent_x, parent_y)| -> Vec<Board> {
             let Board(parent_x_rows) = parent_x;
             let Board(parent_y_rows) = parent_y;
             let mut children: Vec<Board> = Vec::new();
@@ -114,11 +118,15 @@ fn next_candidates(rng: &mut ThreadRng, fitness_scores: Vec<(Board, u8)>) -> Vec
                     let mut child_values: Vec<u8> = Vec::new();
 
                     for j in 0..parent_x_values.len() {
-                        // TODO: Add mutations here
-                        match rng.sample(Uniform::new(0, 2)) {
-                            0 => child_values.push(parent_x_values[j]),
-                            1 => child_values.push(parent_y_values[j]),
-                            _ => (),
+                        let mutation_chance = rng.sample(mutation_range);
+
+                        match mutation_chance <= MUTATION_RATE {
+                            true => child_values.push(rng.sample(mutation_values)),
+                            false => match rng.sample(inherits_from) {
+                                0 => child_values.push(parent_x_values[j]),
+                                1 => child_values.push(parent_y_values[j]),
+                                _ => (),
+                            },
                         }
                     }
 
@@ -137,26 +145,25 @@ fn next_candidates(rng: &mut ThreadRng, fitness_scores: Vec<(Board, u8)>) -> Vec
 fn main() -> Result<(), Box<dyn Error>> {
     let base = Board::default();
     let mut rng = thread_rng();
-    let mut candidates = seed_initial_candidates(&mut rng, Uniform::from(1..10));
 
-    for generation in 0..MAX_GENERATIONS {
-        if generation == MAX_GENERATIONS - 1 {
-            println!("Generation: {}\n{}", generation, candidates[0]);
-        }
+    loop {
+        let now = SystemTime::now();
+        let mut generation: u64 = 0;
+        let mut candidates = seed_initial_candidates(&mut rng, Uniform::from(1..10));
 
-        candidates = run_simulation(&base, &mut rng, candidates)?;
+        loop {
+            candidates = run_simulation(&base, &mut rng, candidates)?;
 
-        if candidates.len() == 1 {
-            println!("Solution:\n{}", candidates[0]);
-            return Ok(());
-        }
+            if candidates.len() == 1 {
+                println!(
+                    "Solution Found: Generation: {}: Duration: {} seconds",
+                    generation,
+                    now.elapsed().unwrap().as_secs()
+                );
+                break;
+            }
 
-        if generation % 1000 == 0 {
-            println!("Generation: {}\n{}", generation, candidates[0]);
+            generation += 1;
         }
     }
-
-    println!("No solution found");
-
-    Ok(())
 }
