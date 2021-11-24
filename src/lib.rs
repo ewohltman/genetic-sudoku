@@ -1,6 +1,7 @@
 pub mod errors;
 
 use errors::{ErrorType, InvalidSolution};
+use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -52,19 +53,30 @@ impl Board {
     }
 
     fn count_duplicates(&self) -> u8 {
-        let mut duplicates: u8 = 0;
+        let mut total_duplicates: u8 = 0;
 
-        for row in self.0.iter() {
-            let mut hash_map: HashMap<u8, bool> = HashMap::new();
+        let duplicates_per_row: Vec<u8> = self
+            .0
+            .par_iter()
+            .map(|row| -> u8 {
+                let mut duplicates: u8 = 0;
+                let mut hash_map: HashMap<u8, bool> = HashMap::new();
 
-            for value in row.0.iter() {
-                if hash_map.insert(*value, true).is_some() {
-                    duplicates += 1;
+                for value in row.0.iter() {
+                    if hash_map.insert(*value, true).is_some() {
+                        duplicates += 1;
+                    }
                 }
-            }
+
+                duplicates
+            })
+            .collect();
+
+        for row_duplicates in duplicates_per_row.into_iter() {
+            total_duplicates += row_duplicates;
         }
 
-        duplicates
+        total_duplicates
     }
 
     fn transpose(&self) -> Board {
