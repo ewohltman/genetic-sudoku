@@ -158,8 +158,13 @@ fn make_children(parents: (Board, Board)) -> Vec<Board> {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let base = Board::default();
+    let mut runs: u64 = 0;
+    let mut total_duration: u64 = 0;
+    let mut total_generations: u64 = 0;
 
     loop {
+        runs += 1;
+
         let now = SystemTime::now();
         let mut generation: u64 = 0;
         let mut candidates = seed_initial_candidates(Uniform::from(1..10));
@@ -168,10 +173,16 @@ fn main() -> Result<(), Box<dyn Error>> {
             candidates = run_simulation(&base, candidates)?;
 
             if candidates.len() == 1 {
+                let duration = now.elapsed().unwrap().as_secs();
+                total_duration += duration;
+                total_generations += generation;
+
                 println!(
-                    "Solution Found: Generation: {}: Duration: {} seconds",
+                    "Solution: Generation: {} | Duration: {} seconds | Average Generation: {} | Average Duration: {}",
                     generation,
-                    now.elapsed().unwrap().as_secs()
+                    duration,
+                    total_generations / runs,
+                    total_duration / runs
                 );
                 break;
             }
