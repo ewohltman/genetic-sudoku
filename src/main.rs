@@ -1,4 +1,4 @@
-use genetic_sudoku::{errors::InvalidSolution, Board, Row};
+use genetic_sudoku::{al_escargot, errors::InvalidSolution, Board, Row};
 use rand::rngs::ThreadRng;
 use rand::{distributions::Uniform, thread_rng, Rng};
 use rayon::iter::Zip;
@@ -157,7 +157,7 @@ fn make_children(parents: (Board, Board)) -> Vec<Board> {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let base = Board::default();
+    let base = Board::new(al_escargot());
     let mut runs: u64 = 0;
     let mut total_duration: u64 = 0;
     let mut total_generations: u64 = 0;

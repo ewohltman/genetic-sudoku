@@ -128,6 +128,34 @@ impl Display for Board {
     }
 }
 
+pub fn al_escargot() -> Vec<Row> {
+    vec![
+        Row(vec![1, 0, 0, 0, 0, 7, 0, 9, 0]),
+        Row(vec![0, 3, 0, 0, 2, 0, 0, 0, 8]),
+        Row(vec![0, 0, 9, 6, 0, 0, 5, 0, 0]),
+        Row(vec![0, 0, 5, 3, 0, 0, 9, 0, 0]),
+        Row(vec![0, 1, 0, 0, 8, 0, 0, 0, 2]),
+        Row(vec![6, 0, 0, 0, 0, 4, 0, 0, 0]),
+        Row(vec![3, 0, 0, 0, 0, 0, 0, 1, 0]),
+        Row(vec![0, 4, 0, 0, 0, 0, 0, 0, 7]),
+        Row(vec![0, 0, 7, 0, 0, 0, 3, 0, 0]),
+    ]
+}
+
+pub fn al_escargot_2() -> Vec<Row> {
+    vec![
+        Row(vec![0, 0, 5, 3, 0, 0, 0, 0, 0]),
+        Row(vec![8, 0, 0, 0, 0, 0, 0, 2, 0]),
+        Row(vec![0, 7, 0, 0, 1, 0, 5, 0, 0]),
+        Row(vec![4, 0, 0, 0, 0, 5, 3, 0, 0]),
+        Row(vec![0, 1, 0, 0, 7, 0, 0, 0, 6]),
+        Row(vec![0, 0, 3, 2, 0, 0, 0, 8, 0]),
+        Row(vec![0, 6, 0, 5, 0, 0, 0, 0, 9]),
+        Row(vec![0, 0, 4, 0, 0, 0, 0, 3, 0]),
+        Row(vec![0, 0, 0, 0, 0, 9, 7, 0, 0]),
+    ]
+}
+
 fn apply_overlay<T, F>(base: &[T], overlay: &[T], f: F) -> Result<Vec<T>, InvalidSolution>
 where
     F: Fn((&T, &T)) -> Result<T, InvalidSolution>,
