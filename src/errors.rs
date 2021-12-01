@@ -1,4 +1,12 @@
-use super::Row;
+#![warn(
+clippy::all,
+// clippy::restriction,
+clippy::pedantic,
+clippy::nursery,
+clippy::cargo,
+)]
+
+use super::sudoku::Row;
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
@@ -15,8 +23,9 @@ pub struct InvalidSolution {
 }
 
 impl InvalidSolution {
-    pub fn new(error_type: ErrorType) -> InvalidSolution {
-        InvalidSolution { error: error_type }
+    #[must_use]
+    pub const fn new(error_type: ErrorType) -> Self {
+        Self { error: error_type }
     }
 }
 
@@ -28,7 +37,7 @@ impl Debug for InvalidSolution {
                 writeln!(f, "Invalid rows:")?;
 
                 for row in rows.iter() {
-                    writeln!(f, "{}", row)?
+                    writeln!(f, "{}", row)?;
                 }
             }
         }

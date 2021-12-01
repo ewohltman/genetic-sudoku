@@ -1,4 +1,12 @@
-use genetic_sudoku::{al_escargot, errors::InvalidSolution, Board, Row};
+#![warn(
+clippy::all,
+// clippy::restriction,
+clippy::pedantic,
+clippy::nursery,
+clippy::cargo,
+)]
+
+use genetic_sudoku::{errors::InvalidSolution, sudoku::al_escargot, sudoku::Board, sudoku::Row};
 use rand::rngs::ThreadRng;
 use rand::{distributions::Uniform, thread_rng, Rng};
 use rayon::iter::Zip;
@@ -28,7 +36,7 @@ fn generate_candidate(rng: &mut ThreadRng, uniform_range: Uniform<u8>) -> Board 
         let mut row = Row(Vec::new());
 
         for _ in 0..9 {
-            row.0.push(rng.sample(uniform_range))
+            row.0.push(rng.sample(uniform_range));
         }
 
         solution.0.push(row);
@@ -56,12 +64,12 @@ fn run_simulation(base: &Board, candidates: Vec<Board>) -> Result<Vec<Board>, In
         })
         .collect::<Result<Vec<Option<Board>>, InvalidSolution>>()?
         .into_par_iter()
-        .filter(|valid_solution| valid_solution.is_some())
-        .map(|valid_solution| valid_solution.unwrap())
+        .filter(Option::is_some)
+        .map(Option::unwrap)
         .collect();
 
     if !valid_solutions.is_empty() {
-        return Ok(vec![valid_solutions.first().unwrap().to_owned()]);
+        return Ok(vec![valid_solutions.first().unwrap().clone()]);
     }
 
     let fitness_scores = fitness_scores.lock().unwrap().to_vec();
@@ -104,7 +112,7 @@ fn make_parents(survivors: Vec<Board>) -> Zip<IntoIter<Board>, IntoIter<Board>> 
     let mut parents_x: Vec<Board> = Vec::with_capacity(half_parents);
     let mut parents_y: Vec<Board> = Vec::with_capacity(half_parents);
 
-    for (parent_x, parent_y) in parents.into_iter() {
+    for (parent_x, parent_y) in parents {
         if let Some(parent) = parent_x {
             parents_x.push(parent);
         }
@@ -137,17 +145,18 @@ fn make_children(parents: (Board, Board)) -> Vec<Board> {
             for j in 0..parent_x_values.len() {
                 let mutation_chance = rng.sample(mutation_range);
 
-                match mutation_chance <= MUTATION_RATE {
-                    true => child_values.push(rng.sample(mutation_values)),
-                    false => match rng.sample(inherits_from) {
+                if mutation_chance <= MUTATION_RATE {
+                    child_values.push(rng.sample(mutation_values));
+                } else {
+                    match rng.sample(inherits_from) {
                         0 => child_values.push(parent_x_values[j]),
                         1 => child_values.push(parent_y_values[j]),
                         _ => (),
-                    },
+                    }
                 }
             }
 
-            child.push(Row(child_values))
+            child.push(Row(child_values));
         }
 
         children.push(Board(child));
