@@ -39,10 +39,10 @@ impl Board {
         Self(rows)
     }
 
-    /// Overlays the given `overlay` on top of `self`
+    /// Overlays the given `overlay` on top of `self`.
     ///
     /// Returns a Result containing a new Board with the provided `overlay`
-    /// on top of `self`
+    /// on top of `self`.
     ///
     /// # Arguments
     ///
@@ -66,7 +66,7 @@ impl Board {
     /// # Errors
     ///
     /// Will return `Err(InvalidSolution)` if `overlay` is not the same length
-    /// as `self`
+    /// as `self`.
     pub fn overlay(&self, overlay: &Self) -> Result<Self, InvalidSolution> {
         let Self(base) = &self;
         let Self(overlay) = overlay;
