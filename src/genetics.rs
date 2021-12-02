@@ -79,9 +79,8 @@ pub fn run_simulation(base: &Board, candidates: Vec<Board>) -> Result<Vec<Board>
             Ok(None)
         })
         .collect::<Result<Vec<Option<Board>>, InvalidSolution>>()?
-        .into_par_iter()
-        .filter(Option::is_some)
-        .map(Option::unwrap)
+        .into_iter()
+        .flatten()
         .collect();
 
     if !valid_solutions.is_empty() {
