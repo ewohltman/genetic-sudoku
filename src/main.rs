@@ -11,9 +11,9 @@ use std::error::Error;
 use std::time::Instant;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let start = Instant::now();
     let base = Board::new(al_escargot());
-    let mut runs: u64 = 0;
-    let mut total_duration: u64 = 0;
+    let mut runs: u32 = 0;
     let mut total_generations: u64 = 0;
 
     loop {
@@ -27,16 +27,14 @@ fn main() -> Result<(), Box<dyn Error>> {
             candidates = genetics::run_simulation(&base, candidates)?;
 
             if candidates.len() == 1 {
-                let duration = now.elapsed().as_secs();
-                total_duration += duration;
                 total_generations += generation;
 
                 println!(
-                    "Solution: Generation: {} | Duration: {} seconds | Average Generation: {} | Average Duration: {}",
+                    "Solution: Generation: {} | Duration: {:?} | Average Generation: {} | Average Duration: {:?}",
                     generation,
-                    duration,
-                    total_generations / runs,
-                    total_duration / runs
+                    now.elapsed(),
+                    total_generations / u64::from(runs),
+                    start.elapsed() / runs
                 );
                 break;
             }
