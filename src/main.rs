@@ -8,7 +8,7 @@ clippy::cargo,
 
 use genetic_sudoku::{genetics, sudoku::al_escargot, sudoku::Board};
 use std::error::Error;
-use std::time::SystemTime;
+use std::time::Instant;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let base = Board::new(al_escargot());
@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     loop {
         runs += 1;
 
-        let now = SystemTime::now();
+        let now = Instant::now();
         let mut generation: u64 = 0;
         let mut candidates = genetics::seed_initial_candidates();
 
@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             candidates = genetics::run_simulation(&base, candidates)?;
 
             if candidates.len() == 1 {
-                let duration = now.elapsed().unwrap().as_secs();
+                let duration = now.elapsed().as_secs();
                 total_duration += duration;
                 total_generations += generation;
 
