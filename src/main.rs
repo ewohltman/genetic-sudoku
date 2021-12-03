@@ -6,15 +6,13 @@ clippy::nursery,
 clippy::cargo,
 )]
 
-// use genetic_sudoku::{genetics, sudoku::al_escargot, sudoku::Board};
-use genetic_sudoku::{genetics, sudoku, sudoku::Board};
+use genetic_sudoku::{genetics, sudoku::Board};
 use std::error::Error;
 use std::time::Instant;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
-    // let base = Board::default();
-    let base = Board::new(sudoku::al_escargot());
+    let base = Board::default();
     let mut runs: u32 = 0;
     let mut total_generations: u64 = 0;
 
