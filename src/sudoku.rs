@@ -6,16 +6,21 @@ clippy::nursery,
 clippy::cargo,
 )]
 
-use super::errors::{ErrorType, InvalidSolution};
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Row(pub Vec<u8>);
+pub struct Row<const N: usize>(pub [u8; N]);
 
-impl Display for Row {
+impl<const N: usize> Default for Row<N> {
+    fn default() -> Self {
+        Self(vec![0; N].try_into().unwrap())
+    }
+}
+
+impl<const N: usize> Display for Row<N> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let values = &self.0;
 
@@ -31,11 +36,11 @@ impl Display for Row {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Board(pub Vec<Row>);
+pub struct Board<const N: usize>(pub [Row<N>; N]);
 
-impl Board {
+impl<const N: usize> Board<N> {
     #[must_use]
-    pub fn new(rows: Vec<Row>) -> Self {
+    pub const fn new(rows: [Row<N>; N]) -> Self {
         Self(rows)
     }
 
@@ -53,32 +58,39 @@ impl Board {
     /// ```
     /// use genetic_sudoku::sudoku::{Board, Row};
     ///
-    /// # fn main() -> Result<(), genetic_sudoku::errors::InvalidSolution> {
-    /// let base = Board::new(vec![Row(vec![0, 1]), Row(vec![1, 0])]);
-    /// let overlay = Board::new(vec![Row(vec![2, 0]), Row(vec![0, 2])]);
-    /// let overlaid = base.overlay(&overlay)?;
+    /// let base = Board::new([Row([0, 1]), Row([1, 0])]);
+    /// let overlay = Board::new([Row([2, 0]), Row([0, 2])]);
+    /// let overlaid = base.overlay(&overlay);
     ///
-    /// assert_eq!(Board::new(vec![Row(vec![2, 1]), Row(vec![1, 2])]), overlaid);
-    /// # Ok(())
-    /// # }
+    /// assert_eq!(Board::new([Row([2, 1]), Row([1, 2])]), overlaid);
     /// ```
     ///
-    /// # Errors
+    /// # Panics
     ///
-    /// Will return `Err(InvalidSolution)` if `overlay` is not the same length
-    /// as `self`.
-    pub fn overlay(&self, overlay: &Self) -> Result<Self, InvalidSolution> {
-        let Self(base) = &self;
-        let Self(overlay) = overlay;
+    /// Potentially panics if intermediate vectors cannot be converted to fixed
+    /// sized arrays.
+    #[must_use]
+    pub fn overlay(&self, overlay: &Self) -> Self {
+        let base_board: &[Row<N>; N] = &self.0;
+        let overlay_board: &[Row<N>; N] = &overlay.0;
 
-        apply_overlay(base, overlay, |(Row(base), Row(overlay))| {
-            apply_overlay(base, overlay, |(base, overlay)| match *base {
-                0 => Ok(*overlay),
-                _ => Ok(*base),
-            })
-            .map(Row)
-        })
-        .map(Board)
+        let board: Vec<Row<N>> =
+            apply_overlay(base_board, overlay_board, |(base_row, overlay_row)| {
+                let base_row: &[u8; N] = &base_row.0;
+                let overlay_row: &[u8; N] = &overlay_row.0;
+
+                let row: Vec<u8> =
+                    apply_overlay(base_row, overlay_row, |(base_value, overlay_value)| {
+                        match *base_value {
+                            0 => *overlay_value,
+                            _ => *base_value,
+                        }
+                    });
+
+                Row(row.try_into().unwrap())
+            });
+
+        Self(board.try_into().unwrap())
     }
 
     #[must_use]
@@ -115,44 +127,35 @@ impl Board {
 
     fn transpose(&self) -> Self {
         let rows = &self.0;
-        let row_len = rows[0].0.len();
-        let mut transposed: Vec<Row> = Vec::with_capacity(row_len);
+        let mut transposed: Vec<Row<N>> = vec![Row::default(); N];
 
-        // Initialize the transposed rows
-        for _ in 0..row_len {
-            transposed.push(Row(Vec::<u8>::with_capacity(rows.len())));
-        }
-
-        for row in rows.iter() {
-            let row_values = row.0.iter();
-
-            // For each row value index, push row value to transposed row index
-            for (j, value) in row_values.enumerate() {
-                transposed[j].0.push(*value);
+        for (i, row) in rows.iter().enumerate() {
+            for (j, value) in row.0.iter().enumerate() {
+                transposed[j].0[i] = *value;
             }
         }
 
-        Self(transposed)
+        Self(transposed.try_into().unwrap())
     }
 }
 
-impl Default for Board {
+impl Default for Board<9> {
     fn default() -> Self {
-        Self(vec![
-            Row(vec![0, 0, 4, 0, 5, 0, 0, 0, 0]),
-            Row(vec![9, 0, 0, 7, 3, 4, 6, 0, 0]),
-            Row(vec![0, 0, 3, 0, 2, 1, 0, 4, 9]),
-            Row(vec![0, 3, 5, 0, 9, 0, 4, 8, 0]),
-            Row(vec![0, 9, 0, 0, 0, 0, 0, 3, 0]),
-            Row(vec![0, 7, 6, 0, 1, 0, 9, 2, 0]),
-            Row(vec![3, 1, 0, 9, 7, 0, 2, 0, 0]),
-            Row(vec![0, 0, 9, 1, 8, 2, 0, 0, 3]),
-            Row(vec![0, 0, 0, 0, 6, 0, 1, 0, 0]),
+        Self([
+            Row([0, 0, 4, 0, 5, 0, 0, 0, 0]),
+            Row([9, 0, 0, 7, 3, 4, 6, 0, 0]),
+            Row([0, 0, 3, 0, 2, 1, 0, 4, 9]),
+            Row([0, 3, 5, 0, 9, 0, 4, 8, 0]),
+            Row([0, 9, 0, 0, 0, 0, 0, 3, 0]),
+            Row([0, 7, 6, 0, 1, 0, 9, 2, 0]),
+            Row([3, 1, 0, 9, 7, 0, 2, 0, 0]),
+            Row([0, 0, 9, 1, 8, 2, 0, 0, 3]),
+            Row([0, 0, 0, 0, 6, 0, 1, 0, 0]),
         ])
     }
 }
 
-impl Display for Board {
+impl<const N: usize> Display for Board<N> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         for row in &self.0 {
             writeln!(f, "{}", row)?;
@@ -163,43 +166,39 @@ impl Display for Board {
 }
 
 #[must_use]
-pub fn al_escargot() -> Vec<Row> {
-    vec![
-        Row(vec![1, 0, 0, 0, 0, 7, 0, 9, 0]),
-        Row(vec![0, 3, 0, 0, 2, 0, 0, 0, 8]),
-        Row(vec![0, 0, 9, 6, 0, 0, 5, 0, 0]),
-        Row(vec![0, 0, 5, 3, 0, 0, 9, 0, 0]),
-        Row(vec![0, 1, 0, 0, 8, 0, 0, 0, 2]),
-        Row(vec![6, 0, 0, 0, 0, 4, 0, 0, 0]),
-        Row(vec![3, 0, 0, 0, 0, 0, 0, 1, 0]),
-        Row(vec![0, 4, 0, 0, 0, 0, 0, 0, 7]),
-        Row(vec![0, 0, 7, 0, 0, 0, 3, 0, 0]),
+pub const fn al_escargot() -> [Row<9>; 9] {
+    [
+        Row([1, 0, 0, 0, 0, 7, 0, 9, 0]),
+        Row([0, 3, 0, 0, 2, 0, 0, 0, 8]),
+        Row([0, 0, 9, 6, 0, 0, 5, 0, 0]),
+        Row([0, 0, 5, 3, 0, 0, 9, 0, 0]),
+        Row([0, 1, 0, 0, 8, 0, 0, 0, 2]),
+        Row([6, 0, 0, 0, 0, 4, 0, 0, 0]),
+        Row([3, 0, 0, 0, 0, 0, 0, 1, 0]),
+        Row([0, 4, 0, 0, 0, 0, 0, 0, 7]),
+        Row([0, 0, 7, 0, 0, 0, 3, 0, 0]),
     ]
 }
 
 #[must_use]
-pub fn al_escargot_2() -> Vec<Row> {
-    vec![
-        Row(vec![0, 0, 5, 3, 0, 0, 0, 0, 0]),
-        Row(vec![8, 0, 0, 0, 0, 0, 0, 2, 0]),
-        Row(vec![0, 7, 0, 0, 1, 0, 5, 0, 0]),
-        Row(vec![4, 0, 0, 0, 0, 5, 3, 0, 0]),
-        Row(vec![0, 1, 0, 0, 7, 0, 0, 0, 6]),
-        Row(vec![0, 0, 3, 2, 0, 0, 0, 8, 0]),
-        Row(vec![0, 6, 0, 5, 0, 0, 0, 0, 9]),
-        Row(vec![0, 0, 4, 0, 0, 0, 0, 3, 0]),
-        Row(vec![0, 0, 0, 0, 0, 9, 7, 0, 0]),
+pub const fn al_escargot_2() -> [Row<9>; 9] {
+    [
+        Row([0, 0, 5, 3, 0, 0, 0, 0, 0]),
+        Row([8, 0, 0, 0, 0, 0, 0, 2, 0]),
+        Row([0, 7, 0, 0, 1, 0, 5, 0, 0]),
+        Row([4, 0, 0, 0, 0, 5, 3, 0, 0]),
+        Row([0, 1, 0, 0, 7, 0, 0, 0, 6]),
+        Row([0, 0, 3, 2, 0, 0, 0, 8, 0]),
+        Row([0, 6, 0, 5, 0, 0, 0, 0, 9]),
+        Row([0, 0, 4, 0, 0, 0, 0, 3, 0]),
+        Row([0, 0, 0, 0, 0, 9, 7, 0, 0]),
     ]
 }
 
-fn apply_overlay<T, F>(base: &[T], overlay: &[T], f: F) -> Result<Vec<T>, InvalidSolution>
+fn apply_overlay<T, F, const N: usize>(base: &[T; N], overlay: &[T; N], f: F) -> Vec<T>
 where
-    F: Fn((&T, &T)) -> Result<T, InvalidSolution>,
+    F: Fn((&T, &T)) -> T,
 {
-    if base.len() != overlay.len() {
-        return Err(InvalidSolution::new(ErrorType::InvalidSize(overlay.len())));
-    }
-
     base.iter().zip(overlay.iter()).map(f).collect()
 }
 
@@ -213,35 +212,37 @@ mod tests {
         let bad_board = bad_test_board();
 
         assert_eq!(0, good_board.fitness());
-        assert_eq!(8, bad_board.fitness());
+        assert_eq!(12, bad_board.fitness());
     }
 
     #[test]
     fn test_board_transpose() {
-        let board: Board = good_test_board();
-        let expected: Board = Board(vec![
-            Row(vec![1, 2, 3]),
-            Row(vec![2, 3, 4]),
-            Row(vec![3, 4, 1]),
-            Row(vec![4, 1, 2]),
+        let board = good_test_board();
+        let expected = Board([
+            Row([1, 2, 3, 4]),
+            Row([2, 3, 4, 1]),
+            Row([3, 4, 1, 2]),
+            Row([4, 1, 2, 3]),
         ]);
 
         assert_eq!(expected, board.transpose());
     }
 
-    fn good_test_board() -> Board {
-        Board(vec![
-            Row(vec![1, 2, 3, 4]),
-            Row(vec![2, 3, 4, 1]),
-            Row(vec![3, 4, 1, 2]),
+    const fn good_test_board() -> Board<4> {
+        Board([
+            Row([1, 2, 3, 4]),
+            Row([2, 3, 4, 1]),
+            Row([3, 4, 1, 2]),
+            Row([4, 1, 2, 3]),
         ])
     }
 
-    fn bad_test_board() -> Board {
-        Board(vec![
-            Row(vec![1, 2, 3, 4]),
-            Row(vec![1, 2, 3, 4]),
-            Row(vec![1, 2, 3, 4]),
+    const fn bad_test_board() -> Board<4> {
+        Board([
+            Row([1, 2, 3, 4]),
+            Row([1, 2, 3, 4]),
+            Row([1, 2, 3, 4]),
+            Row([1, 2, 3, 4]),
         ])
     }
 }
