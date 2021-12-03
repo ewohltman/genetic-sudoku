@@ -6,6 +6,7 @@ clippy::nursery,
 clippy::cargo,
 )]
 
+use arrayvec::ArrayVec;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fmt;
@@ -74,12 +75,12 @@ impl<const N: usize> Board<N> {
         let base_board: &[Row<N>; N] = &self.0;
         let overlay_board: &[Row<N>; N] = &overlay.0;
 
-        let board: Vec<Row<N>> =
+        let board: ArrayVec<Row<N>, N> =
             apply_overlay(base_board, overlay_board, |(base_row, overlay_row)| {
                 let base_row: &[u8; N] = &base_row.0;
                 let overlay_row: &[u8; N] = &overlay_row.0;
 
-                let row: Vec<u8> =
+                let row: ArrayVec<u8, N> =
                     apply_overlay(base_row, overlay_row, |(base_value, overlay_value)| {
                         match *base_value {
                             0 => *overlay_value,
@@ -87,10 +88,10 @@ impl<const N: usize> Board<N> {
                         }
                     });
 
-                Row(row.try_into().unwrap())
+                Row(row.into_inner().unwrap())
             });
 
-        Self(board.try_into().unwrap())
+        Self(board.into_inner().unwrap())
     }
 
     #[must_use]
@@ -195,7 +196,7 @@ pub const fn al_escargot_2() -> [Row<9>; 9] {
     ]
 }
 
-fn apply_overlay<T, F, const N: usize>(base: &[T; N], overlay: &[T; N], f: F) -> Vec<T>
+fn apply_overlay<T, F, const N: usize>(base: &[T; N], overlay: &[T; N], f: F) -> ArrayVec<T, N>
 where
     F: Fn((&T, &T)) -> T,
 {
