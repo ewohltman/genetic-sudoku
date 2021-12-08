@@ -6,7 +6,9 @@ clippy::nursery,
 clippy::cargo,
 )]
 
+use super::errors::NoSolutionFound;
 use super::sudoku::{Board, Row};
+use arrayvec::ArrayVec;
 use parking_lot::Mutex;
 use rand::rngs::ThreadRng;
 use rand::{distributions::Uniform, thread_rng, Rng};
@@ -14,15 +16,19 @@ use rayon::iter::Zip;
 use rayon::prelude::*;
 use rayon::vec::IntoIter;
 
-const MUTATION_RATE: u8 = 5; // Percent
+const MUTATION_RATE: usize = 5; // Percent
+const POPULATION_SIZE: usize = 100;
 
 #[must_use]
 pub fn generate_initial_boards<const N: usize>() -> Vec<Board<N>> {
     let mut rng = thread_rng();
     let mut boards: Vec<Board<N>> = Vec::new();
 
-    for _ in 0..100 {
-        boards.push(generate_initial_board(&mut rng, Uniform::from(1..10)));
+    for _ in 0..POPULATION_SIZE {
+        boards.push(generate_initial_board(
+            &mut rng,
+            Uniform::from(1..=(N as u8)),
+        ));
     }
 
     boards
@@ -30,7 +36,7 @@ pub fn generate_initial_boards<const N: usize>() -> Vec<Board<N>> {
 
 /// Generate an initial board.
 ///
-/// Generates a randomly initialized board..
+/// Generates a randomly initialized board.
 ///
 /// # Arguments
 ///
@@ -46,19 +52,19 @@ pub fn generate_initial_board<const N: usize>(
     rng: &mut ThreadRng,
     uniform_range: Uniform<u8>,
 ) -> Board<N> {
-    let mut board: Vec<Row<N>> = Vec::with_capacity(N);
+    let mut board: ArrayVec<Row<N>, N> = ArrayVec::new_const();
 
     for _ in 0..N {
-        let mut row: Vec<u8> = Vec::with_capacity(N);
+        let mut row: ArrayVec<u8, N> = ArrayVec::new_const();
 
-        for _ in 0..9 {
+        for _ in 0..N {
             row.push(rng.sample(uniform_range));
         }
 
-        board.push(Row(row.try_into().unwrap()));
+        board.push(Row(row.into_inner().unwrap()));
     }
 
-    Board(board.try_into().unwrap())
+    Board(board.into_inner().unwrap())
 }
 
 /// Runs the simulation.
@@ -77,8 +83,10 @@ pub fn generate_initial_board<const N: usize>(
 ///
 /// Will return `Err(InvalidSolution)` if any of the `candidates` are not the
 /// same length as `self`.
-#[must_use]
-pub fn run_simulation<const N: usize>(base: &Board<N>, candidates: Vec<Board<N>>) -> Vec<Board<N>> {
+pub fn run_simulation<const N: usize>(
+    base: &Board<N>,
+    candidates: Vec<Board<N>>,
+) -> Result<Board<N>, NoSolutionFound<N>> {
     let fitness_scores: Mutex<Vec<(Board<N>, u8)>> =
         Mutex::new(Vec::with_capacity(candidates.len()));
 
@@ -101,20 +109,26 @@ pub fn run_simulation<const N: usize>(base: &Board<N>, candidates: Vec<Board<N>>
 
     if !valid_solutions.is_empty() {
         if let Some(valid_solution) = valid_solutions.first() {
-            return vec![valid_solution.clone()];
+            return Ok(valid_solution.clone());
         }
     }
 
-    let fitness_scores = fitness_scores.lock().to_vec();
+    let fitness_scores: Vec<(Board<N>, u8)> = fitness_scores.lock().to_vec();
 
-    next_candidates(fitness_scores)
+    Err(NoSolutionFound {
+        next: next_candidates(fitness_scores),
+    })
 }
 
 fn next_candidates<const N: usize>(fitness_scores: Vec<(Board<N>, u8)>) -> Vec<Board<N>> {
     let survivors: Vec<Board<N>> = apply_natural_selection(fitness_scores);
+    let children_per_parents = POPULATION_SIZE / (survivors.len() / 2);
     let parents: Zip<IntoIter<Board<N>>, IntoIter<Board<N>>> = make_parents(survivors);
 
-    parents.map(make_children).flatten().collect()
+    parents
+        .map(|parents| make_children(&parents, children_per_parents))
+        .flatten()
+        .collect()
 }
 
 fn apply_natural_selection<const N: usize>(
@@ -162,22 +176,25 @@ fn make_parents<const N: usize>(
     parents_x.into_par_iter().zip(parents_y.into_par_iter())
 }
 
-fn make_children<const N: usize>(parents: (Board<N>, Board<N>)) -> Vec<Board<N>> {
+fn make_children<const N: usize>(
+    parents: &(Board<N>, Board<N>),
+    children_per_parents: usize,
+) -> Vec<Board<N>> {
     let Board(parent_x) = parents.0;
     let Board(parent_y) = parents.1;
-    let inherits_from: Uniform<u8> = Uniform::from(0..2);
-    let mutation_range: Uniform<u8> = Uniform::from(0..101);
-    let mutation_values: Uniform<u8> = Uniform::from(1..10);
+    let inherits_from: Uniform<u8> = Uniform::from(0..=1);
+    let mutation_values: Uniform<u8> = Uniform::from(1..=(N as u8));
+    let mutation_range: Uniform<usize> = Uniform::from(0..=POPULATION_SIZE);
     let mut rng = thread_rng();
     let mut children: Vec<Board<N>> = Vec::new();
 
-    for _ in 0..4 {
+    for _ in 0..children_per_parents {
         let mut child: Vec<Row<N>> = Vec::new();
 
         for i in 0..parent_x.len() {
-            let Row(x_values) = parent_x[i].clone();
-            let Row(y_values) = parent_y[i].clone();
-            let mut child_values = Vec::new();
+            let Row(x_values) = parent_x[i];
+            let Row(y_values) = parent_y[i];
+            let mut child_values: Vec<u8> = Vec::new();
 
             for j in 0..x_values.len() {
                 let mutation_chance = rng.sample(mutation_range);

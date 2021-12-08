@@ -24,22 +24,25 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut candidates = genetics::generate_initial_boards();
 
         loop {
-            candidates = genetics::run_simulation(&base, candidates);
+            candidates = match genetics::run_simulation(&base, candidates) {
+                Ok(_) => {
+                    total_generations += generation;
 
-            if candidates.len() == 1 {
-                total_generations += generation;
+                    println!(
+                        "Solution: Generation: {} | Duration: {:?} | Average Generation: {} | Average Duration: {:?}",
+                        generation,
+                        now.elapsed(),
+                        total_generations / u64::from(runs),
+                        start.elapsed() / runs
+                    );
 
-                println!(
-                    "Solution: Generation: {} | Duration: {:?} | Average Generation: {} | Average Duration: {:?}",
-                    generation,
-                    now.elapsed(),
-                    total_generations / u64::from(runs),
-                    start.elapsed() / runs
-                );
-                break;
-            }
-
-            generation += 1;
+                    break;
+                }
+                Err(no_solution_found) => {
+                    generation += 1;
+                    no_solution_found.next
+                }
+            };
         }
     }
 }

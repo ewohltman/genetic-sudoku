@@ -7,17 +7,16 @@ clippy::cargo,
 )]
 
 use arrayvec::ArrayVec;
-use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fmt;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Row<const N: usize>(pub [u8; N]);
 
 impl<const N: usize> Default for Row<N> {
     fn default() -> Self {
-        Self(vec![0; N].try_into().unwrap())
+        Self([0; N])
     }
 }
 
@@ -65,22 +64,17 @@ impl<const N: usize> Board<N> {
     ///
     /// assert_eq!(Board::new([Row([2, 1]), Row([1, 2])]), overlaid);
     /// ```
-    ///
-    /// # Panics
-    ///
-    /// Potentially panics if intermediate vectors cannot be converted to fixed
-    /// sized arrays.
     #[must_use]
     pub fn overlay(&self, overlay: &Self) -> Self {
         let base_board: &[Row<N>; N] = &self.0;
         let overlay_board: &[Row<N>; N] = &overlay.0;
 
-        let board: ArrayVec<Row<N>, N> =
+        let board: [Row<N>; N] =
             apply_overlay(base_board, overlay_board, |(base_row, overlay_row)| {
                 let base_row: &[u8; N] = &base_row.0;
                 let overlay_row: &[u8; N] = &overlay_row.0;
 
-                let row: ArrayVec<u8, N> =
+                let row: [u8; N] =
                     apply_overlay(base_row, overlay_row, |(base_value, overlay_value)| {
                         match *base_value {
                             0 => *overlay_value,
@@ -88,10 +82,10 @@ impl<const N: usize> Board<N> {
                         }
                     });
 
-                Row(row.into_inner().unwrap())
+                Row(row)
             });
 
-        Self(board.into_inner().unwrap())
+        Self(board)
     }
 
     #[must_use]
@@ -102,25 +96,17 @@ impl<const N: usize> Board<N> {
     fn count_duplicates(&self) -> u8 {
         let mut total_duplicates: u8 = 0;
 
-        let duplicates_per_row: Vec<u8> = self
-            .0
-            .par_iter()
-            .map(|row| -> u8 {
-                let mut duplicates: u8 = 0;
-                let mut hash_map: HashMap<u8, bool> = HashMap::new();
+        for row in self.0 {
+            let mut duplicates: u8 = 0;
+            let mut hash_map: HashMap<u8, bool> = HashMap::new();
 
-                for value in &row.0 {
-                    if hash_map.insert(*value, true).is_some() {
-                        duplicates += 1;
-                    }
+            for value in &row.0 {
+                if hash_map.insert(*value, true).is_some() {
+                    duplicates += 1;
                 }
+            }
 
-                duplicates
-            })
-            .collect();
-
-        for row_duplicates in duplicates_per_row {
-            total_duplicates += row_duplicates;
+            total_duplicates += duplicates;
         }
 
         total_duplicates
@@ -128,7 +114,7 @@ impl<const N: usize> Board<N> {
 
     fn transpose(&self) -> Self {
         let rows = &self.0;
-        let mut transposed: Vec<Row<N>> = vec![Row::default(); N];
+        let mut transposed: [Row<N>; N] = [Row::default(); N];
 
         for (i, row) in rows.iter().enumerate() {
             for (j, value) in row.0.iter().enumerate() {
@@ -136,7 +122,7 @@ impl<const N: usize> Board<N> {
             }
         }
 
-        Self(transposed.try_into().unwrap())
+        Self(transposed)
     }
 }
 
@@ -164,6 +150,27 @@ impl<const N: usize> Display for Board<N> {
 
         Ok(())
     }
+}
+
+#[must_use]
+pub const fn x4() -> [Row<4>; 4] {
+    [
+        Row([3, 0, 4, 0]),
+        Row([0, 1, 0, 2]),
+        Row([0, 4, 0, 3]),
+        Row([2, 0, 1, 0]),
+    ]
+}
+
+#[must_use]
+pub const fn x5() -> [Row<5>; 5] {
+    [
+        Row([4, 2, 0, 0, 0]),
+        Row([3, 0, 0, 0, 0]),
+        Row([0, 0, 0, 0, 0]),
+        Row([0, 0, 0, 0, 4]),
+        Row([0, 0, 0, 2, 1]),
+    ]
 }
 
 #[must_use]
@@ -196,11 +203,17 @@ pub const fn al_escargot_2() -> [Row<9>; 9] {
     ]
 }
 
-fn apply_overlay<T, F, const N: usize>(base: &[T; N], overlay: &[T; N], f: F) -> ArrayVec<T, N>
+fn apply_overlay<T, F, const N: usize>(base: &[T; N], overlay: &[T; N], f: F) -> [T; N]
 where
+    T: Debug,
     F: Fn((&T, &T)) -> T,
 {
-    base.iter().zip(overlay.iter()).map(f).collect()
+    base.iter()
+        .zip(overlay.iter())
+        .map(f)
+        .collect::<ArrayVec<T, N>>()
+        .into_inner()
+        .unwrap()
 }
 
 #[cfg(test)]
