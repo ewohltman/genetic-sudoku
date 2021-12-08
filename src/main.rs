@@ -7,10 +7,9 @@ clippy::cargo,
 )]
 
 use genetic_sudoku::{genetics, sudoku::Board};
-use std::error::Error;
 use std::time::Instant;
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() {
     let start = Instant::now();
     let base = Board::default();
     let mut runs: u32 = 0;
