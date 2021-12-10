@@ -153,27 +153,6 @@ impl<const N: usize> Display for Board<N> {
 }
 
 #[must_use]
-pub const fn x4() -> [Row<4>; 4] {
-    [
-        Row([3, 0, 4, 0]),
-        Row([0, 1, 0, 2]),
-        Row([0, 4, 0, 3]),
-        Row([2, 0, 1, 0]),
-    ]
-}
-
-#[must_use]
-pub const fn x5() -> [Row<5>; 5] {
-    [
-        Row([4, 2, 0, 0, 0]),
-        Row([3, 0, 0, 0, 0]),
-        Row([0, 0, 0, 0, 0]),
-        Row([0, 0, 0, 0, 4]),
-        Row([0, 0, 0, 2, 1]),
-    ]
-}
-
-#[must_use]
 pub const fn al_escargot() -> [Row<9>; 9] {
     [
         Row([1, 0, 0, 0, 0, 7, 0, 9, 0]),

@@ -4,7 +4,7 @@ use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Debug)]
 pub struct NoSolutionFound<const N: usize> {
-    pub next: Vec<Board<N>>,
+    pub next_generation: Vec<Board<N>>,
 }
 
 impl<const N: usize> Display for NoSolutionFound<N> {

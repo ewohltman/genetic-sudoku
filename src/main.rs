@@ -20,10 +20,10 @@ fn main() {
 
         let now = Instant::now();
         let mut generation: u64 = 0;
-        let mut candidates = genetics::generate_initial_boards();
+        let mut population = genetics::generate_initial_population();
 
         loop {
-            candidates = match genetics::run_simulation(&base, candidates) {
+            population = match genetics::run_simulation(&base, population) {
                 Ok(_) => {
                     total_generations += generation;
 
@@ -39,7 +39,7 @@ fn main() {
                 }
                 Err(no_solution_found) => {
                     generation += 1;
-                    no_solution_found.next
+                    no_solution_found.next_generation
                 }
             };
         }

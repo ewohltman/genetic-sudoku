@@ -18,42 +18,37 @@ use rayon::vec::IntoIter;
 const MUTATION_RATE: u8 = 5; // Percent
 const POPULATION_SIZE: u8 = 100;
 
-#[must_use]
-pub fn generate_initial_boards<const N: usize>() -> Vec<Board<N>> {
-    let mut boards: Vec<Board<N>> = Vec::new();
-
-    for _ in 0..POPULATION_SIZE {
-        boards.push(generate_initial_board());
-    }
-
-    boards
-}
-
-/// Generate an initial board.
+/// Generates an initial population.
 ///
-/// Generates a randomly initialized board.
+/// Generates a randomly initialized population.
 ///
 /// # Panics
 ///
 /// Potentially panics if intermediate vectors cannot be converted to fixed
 /// sized arrays.
 #[must_use]
-pub fn generate_initial_board<const N: usize>() -> Board<N> {
+pub fn generate_initial_population<const N: usize>() -> Vec<Board<N>> {
     let range = Uniform::from(1..=(N as u8));
     let mut rng = thread_rng();
-    let mut board: ArrayVec<Row<N>, N> = ArrayVec::new_const();
+    let mut boards: Vec<Board<N>> = Vec::new();
 
-    for _ in 0..N {
-        let mut row: ArrayVec<u8, N> = ArrayVec::new_const();
+    for _ in 0..POPULATION_SIZE {
+        let mut board: ArrayVec<Row<N>, N> = ArrayVec::new_const();
 
         for _ in 0..N {
-            row.push(rng.sample(range));
+            let mut row: ArrayVec<u8, N> = ArrayVec::new_const();
+
+            for _ in 0..N {
+                row.push(rng.sample(range));
+            }
+
+            board.push(Row(row.into_inner().unwrap()));
         }
 
-        board.push(Row(row.into_inner().unwrap()));
+        boards.push(Board(board.into_inner().unwrap()));
     }
 
-    Board(board.into_inner().unwrap())
+    boards
 }
 
 /// Runs the simulation.
@@ -74,14 +69,13 @@ pub fn generate_initial_board<const N: usize>() -> Board<N> {
 /// same length as `self`.
 pub fn run_simulation<const N: usize>(
     base: &Board<N>,
-    candidates: Vec<Board<N>>,
+    population: Vec<Board<N>>,
 ) -> Result<Board<N>, NoSolutionFound<N>> {
-    let fitness_scores: Mutex<Vec<(Board<N>, u8)>> =
-        Mutex::new(Vec::with_capacity(candidates.len()));
-
-    let valid_solutions: Vec<Board<N>> = candidates
+    let population_scores = Vec::with_capacity(population.len());
+    let population_scores = Mutex::<Vec<(Board<N>, u8)>>::new(population_scores);
+    let valid_solutions = population
         .into_par_iter()
-        .map(|candidate| -> Option<Board<N>> {
+        .flat_map(|candidate| -> Option<Board<N>> {
             let solution = base.overlay(&candidate);
             let score = solution.fitness();
 
@@ -89,44 +83,36 @@ pub fn run_simulation<const N: usize>(
                 return Some(solution);
             }
 
-            fitness_scores.lock().push((solution, score));
+            population_scores.lock().push((solution, score));
 
             None
         })
-        .flatten()
         .collect::<Vec<Board<N>>>();
 
-    if !valid_solutions.is_empty() {
-        if let Some(valid_solution) = valid_solutions.first() {
-            return Ok(valid_solution.clone());
-        }
+    if let Some(valid_solution) = valid_solutions.first() {
+        return Ok(valid_solution.clone());
     }
 
-    let fitness_scores: Vec<(Board<N>, u8)> = fitness_scores.lock().to_vec();
-
     Err(NoSolutionFound {
-        next: next_candidates(fitness_scores),
+        next_generation: next_generation(population_scores.into_inner()),
     })
 }
 
-fn next_candidates<const N: usize>(fitness_scores: Vec<(Board<N>, u8)>) -> Vec<Board<N>> {
-    let survivors: Vec<Board<N>> = apply_natural_selection(fitness_scores);
+fn next_generation<const N: usize>(population_scores: Vec<(Board<N>, u8)>) -> Vec<Board<N>> {
+    let survivors = natural_selection(population_scores);
     let children_per_parents = POPULATION_SIZE / ((survivors.len() / 2) as u8);
-    let parents: Zip<IntoIter<Board<N>>, IntoIter<Board<N>>> = make_parents(survivors);
 
-    parents
-        .map(|parents| make_children(&parents, children_per_parents))
-        .flatten()
+    make_parents(survivors)
+        .into_par_iter()
+        .flat_map(|parents| make_children(parents, children_per_parents))
         .collect()
 }
 
-fn apply_natural_selection<const N: usize>(
-    mut fitness_scores: Vec<(Board<N>, u8)>,
-) -> Vec<Board<N>> {
-    fitness_scores.par_sort_unstable_by_key(|(_, score)| *score);
+fn natural_selection<const N: usize>(mut population_scores: Vec<(Board<N>, u8)>) -> Vec<Board<N>> {
+    population_scores.par_sort_unstable_by_key(|(_, score)| *score);
 
-    fitness_scores
-        .drain(..fitness_scores.len() / 2)
+    population_scores
+        .drain(..population_scores.len() / 2)
         .collect::<Vec<(Board<N>, u8)>>()
         .into_par_iter()
         .map(|(survivor, _)| survivor)
@@ -136,7 +122,7 @@ fn apply_natural_selection<const N: usize>(
 fn make_parents<const N: usize>(
     survivors: Vec<Board<N>>,
 ) -> Zip<IntoIter<Board<N>>, IntoIter<Board<N>>> {
-    let parents: Vec<(Option<Board<N>>, Option<Board<N>>)> = survivors
+    let parents: (Vec<Option<Board<N>>>, Vec<Option<Board<N>>>) = survivors
         .into_par_iter()
         .enumerate()
         .map(|(i, survivor)| -> (Option<Board<N>>, Option<Board<N>>) {
@@ -148,50 +134,41 @@ fn make_parents<const N: usize>(
         })
         .collect();
 
-    let half_parents = parents.len() / 2;
-    let mut parents_x: Vec<Board<N>> = Vec::with_capacity(half_parents);
-    let mut parents_y: Vec<Board<N>> = Vec::with_capacity(half_parents);
-
-    for (parent_x, parent_y) in parents {
-        if let Some(parent) = parent_x {
-            parents_x.push(parent);
-        }
-
-        if let Some(parent) = parent_y {
-            parents_y.push(parent);
-        }
-    }
+    let parents_x: Vec<Board<N>> = parents.0.into_iter().flatten().collect();
+    let parents_y: Vec<Board<N>> = parents.1.into_iter().flatten().collect();
 
     parents_x.into_par_iter().zip(parents_y.into_par_iter())
 }
 
 fn make_children<const N: usize>(
-    parents: &(Board<N>, Board<N>),
+    parents: (Board<N>, Board<N>),
     children_per_parents: u8,
 ) -> Vec<Board<N>> {
     let Board(parent_x) = parents.0;
     let Board(parent_y) = parents.1;
-    let inherits_from: Uniform<u8> = Uniform::from(0..=1);
-    let mutation_values: Uniform<u8> = Uniform::from(1..=(N as u8));
-    let mutation_chance: Uniform<u8> = Uniform::from(0..=100);
+    drop(parents);
+
+    let inherits_from_range: Uniform<u8> = Uniform::from(0..=1);
+    let mutation_chance_range: Uniform<u8> = Uniform::from(0..=100);
+    let mutation_values_range: Uniform<u8> = Uniform::from(1..=(N as u8));
     let mut rng = thread_rng();
     let mut children: Vec<Board<N>> = Vec::new();
 
     for _ in 0..children_per_parents {
-        let mut child: Vec<Row<N>> = Vec::new();
+        let mut child: ArrayVec<Row<N>, N> = ArrayVec::new_const();
 
-        for i in 0..parent_x.len() {
+        for i in 0..N {
             let Row(x_values) = parent_x[i];
             let Row(y_values) = parent_y[i];
-            let mut child_values: Vec<u8> = Vec::new();
+            let mut child_values: ArrayVec<u8, N> = ArrayVec::new_const();
 
             for j in 0..x_values.len() {
-                let mutation_chance = rng.sample(mutation_chance);
+                let mutation_chance = rng.sample(mutation_chance_range);
 
                 if mutation_chance <= MUTATION_RATE {
-                    child_values.push(rng.sample(mutation_values));
+                    child_values.push(rng.sample(mutation_values_range));
                 } else {
-                    match rng.sample(inherits_from) {
+                    match rng.sample(inherits_from_range) {
                         0 => child_values.push(x_values[j]),
                         1 => child_values.push(y_values[j]),
                         _ => (),
@@ -199,10 +176,10 @@ fn make_children<const N: usize>(
                 }
             }
 
-            child.push(Row(child_values.try_into().unwrap()));
+            child.push(Row(child_values.into_inner().unwrap()));
         }
 
-        children.push(Board(child.try_into().unwrap()));
+        children.push(Board(child.into_inner().unwrap()));
     }
 
     children
