@@ -1,17 +1,18 @@
 #![warn(
-clippy::all,
-// clippy::restriction,
-clippy::pedantic,
-clippy::nursery,
-clippy::cargo,
+    clippy::all,
+    // clippy::restriction,
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::cargo
 )]
 
-use genetic_sudoku::{genetics, sudoku::Board};
+use genetic_sudoku::{genetics, sudoku, sudoku::Board};
 use std::time::Instant;
+
+const BASE: Board<9> = sudoku::al_escargot();
 
 fn main() {
     let start = Instant::now();
-    let base = Board::default();
     let mut runs: u32 = 0;
     let mut total_generations: u64 = 0;
 
@@ -20,10 +21,12 @@ fn main() {
 
         let now = Instant::now();
         let mut generation: u64 = 0;
-        let mut population = genetics::generate_initial_population();
+        let mut population =
+            genetics::generate_initial_population::<{ BASE.size() }, { genetics::NUM_POPULATION }>(
+            );
 
         loop {
-            population = match genetics::run_simulation(&base, population) {
+            population = match genetics::run_simulation(&BASE, population) {
                 Ok(_) => {
                     total_generations += generation;
 

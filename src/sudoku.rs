@@ -1,9 +1,9 @@
 #![warn(
-clippy::all,
-// clippy::restriction,
-clippy::pedantic,
-clippy::nursery,
-clippy::cargo,
+    clippy::all,
+    // clippy::restriction,
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::cargo
 )]
 
 use arrayvec::ArrayVec;
@@ -15,12 +15,14 @@ use std::fmt::{Debug, Display, Formatter};
 pub struct Row<const N: usize>(pub [u8; N]);
 
 impl<const N: usize> Default for Row<N> {
+    #[inline]
     fn default() -> Self {
         Self([0; N])
     }
 }
 
 impl<const N: usize> Display for Row<N> {
+    #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let values = &self.0;
 
@@ -35,13 +37,20 @@ impl<const N: usize> Display for Row<N> {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Board<const N: usize>(pub [Row<N>; N]);
 
 impl<const N: usize> Board<N> {
+    #[inline]
     #[must_use]
     pub const fn new(rows: [Row<N>; N]) -> Self {
         Self(rows)
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn size(&self) -> usize {
+        self.0.len()
     }
 
     /// Overlays the given `overlay` on top of `self`.
@@ -64,6 +73,7 @@ impl<const N: usize> Board<N> {
     ///
     /// assert_eq!(Board::new([Row([2, 1]), Row([1, 2])]), overlaid);
     /// ```
+    #[inline]
     #[must_use]
     pub fn overlay(&self, overlay: &Self) -> Self {
         let base_board: &[Row<N>; N] = &self.0;
@@ -88,6 +98,7 @@ impl<const N: usize> Board<N> {
         Self(board)
     }
 
+    #[inline]
     #[must_use]
     pub fn fitness(&self) -> u8 {
         self.count_duplicates() + self.transpose().count_duplicates()
@@ -126,23 +137,8 @@ impl<const N: usize> Board<N> {
     }
 }
 
-impl Default for Board<9> {
-    fn default() -> Self {
-        Self([
-            Row([0, 0, 4, 0, 5, 0, 0, 0, 0]),
-            Row([9, 0, 0, 7, 3, 4, 6, 0, 0]),
-            Row([0, 0, 3, 0, 2, 1, 0, 4, 9]),
-            Row([0, 3, 5, 0, 9, 0, 4, 8, 0]),
-            Row([0, 9, 0, 0, 0, 0, 0, 3, 0]),
-            Row([0, 7, 6, 0, 1, 0, 9, 2, 0]),
-            Row([3, 1, 0, 9, 7, 0, 2, 0, 0]),
-            Row([0, 0, 9, 1, 8, 2, 0, 0, 3]),
-            Row([0, 0, 0, 0, 6, 0, 1, 0, 0]),
-        ])
-    }
-}
-
 impl<const N: usize> Display for Board<N> {
+    #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         for row in &self.0 {
             writeln!(f, "{}", row)?;
@@ -152,9 +148,26 @@ impl<const N: usize> Display for Board<N> {
     }
 }
 
+#[inline]
 #[must_use]
-pub const fn al_escargot() -> [Row<9>; 9] {
-    [
+pub const fn default() -> Board<9> {
+    Board([
+        Row([0, 0, 4, 0, 5, 0, 0, 0, 0]),
+        Row([9, 0, 0, 7, 3, 4, 6, 0, 0]),
+        Row([0, 0, 3, 0, 2, 1, 0, 4, 9]),
+        Row([0, 3, 5, 0, 9, 0, 4, 8, 0]),
+        Row([0, 9, 0, 0, 0, 0, 0, 3, 0]),
+        Row([0, 7, 6, 0, 1, 0, 9, 2, 0]),
+        Row([3, 1, 0, 9, 7, 0, 2, 0, 0]),
+        Row([0, 0, 9, 1, 8, 2, 0, 0, 3]),
+        Row([0, 0, 0, 0, 6, 0, 1, 0, 0]),
+    ])
+}
+
+#[inline]
+#[must_use]
+pub const fn al_escargot() -> Board<9> {
+    Board([
         Row([1, 0, 0, 0, 0, 7, 0, 9, 0]),
         Row([0, 3, 0, 0, 2, 0, 0, 0, 8]),
         Row([0, 0, 9, 6, 0, 0, 5, 0, 0]),
@@ -164,12 +177,13 @@ pub const fn al_escargot() -> [Row<9>; 9] {
         Row([3, 0, 0, 0, 0, 0, 0, 1, 0]),
         Row([0, 4, 0, 0, 0, 0, 0, 0, 7]),
         Row([0, 0, 7, 0, 0, 0, 3, 0, 0]),
-    ]
+    ])
 }
 
+#[inline]
 #[must_use]
-pub const fn al_escargot_2() -> [Row<9>; 9] {
-    [
+pub const fn al_escargot_2() -> Board<9> {
+    Board([
         Row([0, 0, 5, 3, 0, 0, 0, 0, 0]),
         Row([8, 0, 0, 0, 0, 0, 0, 2, 0]),
         Row([0, 7, 0, 0, 1, 0, 5, 0, 0]),
@@ -179,7 +193,7 @@ pub const fn al_escargot_2() -> [Row<9>; 9] {
         Row([0, 6, 0, 5, 0, 0, 0, 0, 9]),
         Row([0, 0, 4, 0, 0, 0, 0, 3, 0]),
         Row([0, 0, 0, 0, 0, 9, 7, 0, 0]),
-    ]
+    ])
 }
 
 fn apply_overlay<T, F, const N: usize>(base: &[T; N], overlay: &[T; N], f: F) -> [T; N]
