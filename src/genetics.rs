@@ -32,7 +32,8 @@ const MUTATION_RATE: u8 = 5; // Percent
 #[inline]
 #[must_use]
 pub fn generate_initial_population<const N: usize, const M: usize>() -> ArrayVec<Board<N>, M> {
-    let range = Uniform::from(1..=(N as u8));
+    let max_digit = u8::try_from(N).expect("digit size exceeds 255");
+    let range = Uniform::from(1..=max_digit);
     let mut rng = thread_rng();
     let mut boards: ArrayVec<Board<N>, M> = ArrayVec::new();
 
@@ -158,7 +159,8 @@ fn make_children<const N: usize>(parents: (Board<N>, Board<N>)) -> Vec<Board<N>>
 
     let inherits_from_range: Uniform<u8> = Uniform::from(0..=1);
     let mutation_chance_range: Uniform<u8> = Uniform::from(0..=100);
-    let mutation_values_range: Uniform<u8> = Uniform::from(1..=(N as u8));
+    let max_digit = u8::try_from(N).expect("digit size exceeds 255");
+    let mutation_values_range: Uniform<u8> = Uniform::from(1..=max_digit);
     let mut rng = thread_rng();
     let mut children: ArrayVec<Board<N>, NUM_CHILDREN_PER_PARENT_PAIRS> = ArrayVec::new_const();
 

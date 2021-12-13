@@ -3,7 +3,7 @@
     // clippy::restriction,
     clippy::pedantic,
     clippy::nursery,
-    clippy::cargo
+    //clippy::cargo
 )]
 
 use genetic_sudoku::{genetics, sudoku, sudoku::Board};
