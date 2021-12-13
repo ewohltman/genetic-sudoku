@@ -9,7 +9,7 @@
 use genetic_sudoku::{genetics, sudoku, sudoku::Board};
 use std::time::Instant;
 
-const BASE: Board<9> = sudoku::al_escargot();
+const BASE: Board<9> = sudoku::default();
 
 fn main() {
     let start = Instant::now();
