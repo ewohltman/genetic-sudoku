@@ -9,7 +9,6 @@
 use super::errors::NoSolutionFound;
 use super::sudoku::{Board, Row};
 use arrayvec::ArrayVec;
-use parking_lot::Mutex;
 use rand::{distributions::Uniform, thread_rng, Rng};
 use rayon::iter::Zip;
 use rayon::prelude::*;
@@ -58,10 +57,8 @@ pub fn generate_initial_population<const N: usize, const M: usize>() -> ArrayVec
 
 /// Runs the simulation.
 ///
-/// Evaluates all the given `candidates` fitness against the `base` Board to
-/// find the closest to correct solutions. Returns a Result containing a Vector
-/// either with a single element, representing a valid correct solution, or the
-/// next generation's candidates to be evaluated.
+/// Evaluates all the given `candidates` fitness against the `base` Board to find the closest to
+/// correct solutions. Returns a a valid correct solution.
 ///
 /// # Arguments
 ///
@@ -77,32 +74,29 @@ pub fn run_simulation<const N: usize, const M: usize>(
     base: &Board<N>,
     population: ArrayVec<Board<N>, M>,
 ) -> Result<Board<N>, NoSolutionFound<N, M>> {
-    let population_scores: ArrayVec<(Board<N>, u8), M> = ArrayVec::new_const();
-    let population_scores = Mutex::<ArrayVec<(Board<N>, u8), M>>::new(population_scores);
-    let valid_solutions = population
+    let population_scores: Result<Vec<(Board<N>, u8)>, Board<N>> = population
         .into_par_iter()
-        .flat_map(|candidate| -> Option<Board<N>> {
+        .map(|candidate| -> Result<(Board<N>, u8), Board<N>> {
             let solution = base.overlay(candidate);
             let score = solution.fitness();
-
             if score == 0 {
-                return Some(solution);
+                Err(solution)
+            } else {
+                Ok((solution, score))
             }
-
-            population_scores.lock().push((solution, score));
-
-            None
         })
-        .collect::<Vec<Board<N>>>();
-    drop(population);
+        .collect();
 
-    if let Some(valid_solution) = valid_solutions.first() {
-        return Ok(*valid_solution);
+    match population_scores {
+        Err(valid_solution) => Ok(valid_solution),
+        Ok(candidates) => {
+            let candidates: ArrayVec<(Board<N>, u8), M> = candidates
+                .into_iter()
+                .collect();
+            let next_generation = next_generation(candidates);
+            Err(NoSolutionFound { next_generation })
+        }
     }
-
-    Err(NoSolutionFound {
-        next_generation: next_generation(population_scores.into_inner()),
-    })
 }
 
 fn next_generation<const N: usize, const M: usize>(
