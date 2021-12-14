@@ -6,10 +6,13 @@
     clippy::cargo
 )]
 
-use genetic_sudoku::{genetics, sudoku, sudoku::Board};
+use genetic_sudoku::{
+    genetics::{generate_initial_population, run_simulation, NUM_POPULATION},
+    sudoku::{default, Board},
+};
 use std::time::Instant;
 
-const BASE: Board<9> = sudoku::default();
+const BASE: Board<9> = default();
 
 fn main() {
     let start = Instant::now();
@@ -21,12 +24,10 @@ fn main() {
 
         let now = Instant::now();
         let mut generation: u64 = 0;
-        let mut population =
-            genetics::generate_initial_population::<{ BASE.size() }, { genetics::NUM_POPULATION }>(
-            );
+        let mut population = generate_initial_population::<{ BASE.size() }, { NUM_POPULATION }>();
 
         loop {
-            population = match genetics::run_simulation(&BASE, population) {
+            population = match run_simulation(&BASE, population) {
                 Ok(_) => {
                     total_generations += generation;
 
