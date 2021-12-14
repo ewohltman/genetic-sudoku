@@ -57,13 +57,13 @@ pub fn generate_initial_population<const N: usize, const M: usize>() -> ArrayVec
 
 /// Runs the simulation.
 ///
-/// Evaluates all the given `candidates` fitness against the `base` Board to find the closest to
-/// correct solutions. Returns a a valid correct solution.
+/// Evaluates the given `population` fitness against the `base` Board to find
+/// the closest to correct solutions. Returns a valid solution.
 ///
 /// # Arguments
 ///
 /// * `base` - The base Board to find solutions for
-/// * `candidates` - A Vector of solution candidates
+/// * `population` - The population to evaluate fitness for
 ///
 /// # Errors
 ///
@@ -86,13 +86,12 @@ pub fn run_simulation<const N: usize, const M: usize>(
             }
         })
         .collect();
+    drop(population);
 
     match population_scores {
         Err(valid_solution) => Ok(valid_solution),
-        Ok(candidates) => {
-            let candidates: ArrayVec<(Board<N>, u8), M> = candidates
-                .into_iter()
-                .collect();
+        Ok(population) => {
+            let candidates: ArrayVec<(Board<N>, u8), M> = population.into_iter().collect();
             let next_generation = next_generation(candidates);
             Err(NoSolutionFound { next_generation })
         }

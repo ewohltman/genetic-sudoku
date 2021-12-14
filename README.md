@@ -12,7 +12,7 @@ to start again with:
 * The average generation a solution is found in
 * The average duration it takes to find a solution
 
-The Sudoku puzzle is modeled as a matrix of sorts. Values of 0 represent empty
+The Sudoku puzzle board is modeled as a matrix. Values of 0 represent empty
 cells in the puzzle, and non-zero values are the numbers given in the puzzle.
 
 A default puzzle is built in that looks like this:
@@ -35,13 +35,13 @@ pub const fn default() -> Board<9> {
 }
 ```
 
-It's instantiated like so in `main.rs`:
+It's instantiated in `main.rs`:
 
 ```rust
 const BASE: Board<9> = sudoku::default();
 ```
 
-The `Al Escarogot` Sudoku puzzle is also available:
+The `Al Escargot` Sudoku puzzle is also available:
 
 ```rust
 #[inline]
@@ -61,7 +61,7 @@ pub const fn al_escargot() -> Board<9> {
 }
 ```
 
-To use it, `main.rs` will need to be updated like so:
+To use it, `main.rs` will need to be updated:
 
 ```rust
 const BASE: Board<9> = sudoku::al_escargot();
@@ -79,11 +79,11 @@ score. The lower the score, the better the solution with a fitness score of 0
 being a valid solution to the puzzle
 * With all the potential solution fitness scores calculated:
   * Sort them and apply "natural selection" to filter out only the top 50%
-  * Of the remaining 50%, group them into pairs
+  * Of the remaining 50%, group them into 25 pairs
   * Have each pair produce 4 children to create the next generation's
 population of 100 potential solutions
     * When each child is created, for each value there is a 5% chance to
 randomly "mutate" and generate a whole new value
     * The other 95% of the time, there is a 50% chance to "inherit" the value
-from one parent, and a 50% chance to inherit from the other parent
+from one parent, and a 50% chance to "inherit" from the other parent
 * Loop this process until a valid solution is found
