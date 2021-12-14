@@ -1,9 +1,9 @@
 #![warn(
-clippy::all,
-// clippy::restriction,
+//clippy::all,
+//clippy::restriction,
 clippy::pedantic,
 clippy::nursery,
-clippy::cargo,
+//clippy::cargo,
 )]
 
 pub mod errors;
