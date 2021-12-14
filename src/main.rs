@@ -8,11 +8,12 @@
 
 use genetic_sudoku::{
     genetics::{generate_initial_population, run_simulation, NUM_POPULATION},
-    sudoku::{default, Board},
+    sudoku,
+    sudoku::Board,
 };
 use std::time::Instant;
 
-const BASE: Board<9> = default();
+const BASE: Board<9> = sudoku::default();
 
 fn main() {
     let start = Instant::now();
