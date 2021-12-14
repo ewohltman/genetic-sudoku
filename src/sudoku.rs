@@ -7,7 +7,6 @@
 )]
 
 use arrayvec::ArrayVec;
-use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 
@@ -181,22 +180,6 @@ pub const fn al_escargot() -> Board<9> {
         Row([3, 0, 0, 0, 0, 0, 0, 1, 0]),
         Row([0, 4, 0, 0, 0, 0, 0, 0, 7]),
         Row([0, 0, 7, 0, 0, 0, 3, 0, 0]),
-    ])
-}
-
-#[inline]
-#[must_use]
-pub const fn al_escargot_2() -> Board<9> {
-    Board([
-        Row([0, 0, 5, 3, 0, 0, 0, 0, 0]),
-        Row([8, 0, 0, 0, 0, 0, 0, 2, 0]),
-        Row([0, 7, 0, 0, 1, 0, 5, 0, 0]),
-        Row([4, 0, 0, 0, 0, 5, 3, 0, 0]),
-        Row([0, 1, 0, 0, 7, 0, 0, 0, 6]),
-        Row([0, 0, 3, 2, 0, 0, 0, 8, 0]),
-        Row([0, 6, 0, 5, 0, 0, 0, 0, 9]),
-        Row([0, 0, 4, 0, 0, 0, 0, 3, 0]),
-        Row([0, 0, 0, 0, 0, 9, 7, 0, 0]),
     ])
 }
 
