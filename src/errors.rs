@@ -1,3 +1,11 @@
+#![warn(
+    clippy::all,
+    // clippy::restriction,
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::cargo
+)]
+
 use super::sudoku::Board;
 use arrayvec::ArrayVec;
 use std::error::Error;
