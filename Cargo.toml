@@ -10,10 +10,12 @@ description = "Genetic Algorithm Sudoku solver"
 license-file = "LICENSE"
 
 [dependencies]
-arrayvec = "0.7.2"
-bencher = "0.1.5"
-rayon = "1.5.1"
-rand = "0.8.4"
+arrayvec = "0.7"
+rayon = "1.5"
+rand = "0.8"
+
+[dev-dependencies]
+criterion = "0.3"
 
 [[bench]]
 name = "sudoku"
