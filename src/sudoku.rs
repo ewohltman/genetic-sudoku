@@ -111,27 +111,6 @@ impl<const N: usize> Board<N> {
 
         for row in self.0 {
             let mut duplicates: u8 = 0;
-            let mut hash_map: HashMap<u8, bool> = HashMap::new();
-
-            for value in &row.0 {
-                if hash_map.insert(*value, true).is_some() {
-                    duplicates += 1;
-                }
-            }
-
-            total_duplicates += duplicates;
-        }
-
-        total_duplicates
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn count_duplicates_array(&self) -> u8 {
-        let mut total_duplicates: u8 = 0;
-
-        for row in self.0 {
-            let mut duplicates: u8 = 0;
             let mut duplicate_counts: [u8; N] = [0; N];
 
             for value in &row.0 {
