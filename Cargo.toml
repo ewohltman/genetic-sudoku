@@ -5,5 +5,10 @@ edition = "2021"
 
 [dependencies]
 arrayvec = "0.7.2"
+bencher = "0.1.5"
 rayon = "1.5.1"
 rand = "0.8.4"
+
+[[bench]]
+name = "sudoku"
+harness = false

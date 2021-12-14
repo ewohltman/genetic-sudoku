@@ -104,7 +104,9 @@ impl<const N: usize> Board<N> {
         self.count_duplicates() + self.transpose().count_duplicates()
     }
 
-    fn count_duplicates(&self) -> u8 {
+    #[inline]
+    #[must_use]
+    pub fn count_duplicates(&self) -> u8 {
         let mut total_duplicates: u8 = 0;
 
         for row in self.0 {
@@ -113,6 +115,29 @@ impl<const N: usize> Board<N> {
 
             for value in &row.0 {
                 if hash_map.insert(*value, true).is_some() {
+                    duplicates += 1;
+                }
+            }
+
+            total_duplicates += duplicates;
+        }
+
+        total_duplicates
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn count_duplicates_array(&self) -> u8 {
+        let mut total_duplicates: u8 = 0;
+
+        for row in self.0 {
+            let mut duplicates: u8 = 0;
+            let mut duplicate_counts: [u8; N] = [0; N];
+
+            for value in &row.0 {
+                duplicate_counts[(*value - 1) as usize] += 1;
+
+                if duplicate_counts[(*value - 1) as usize] > 1 {
                     duplicates += 1;
                 }
             }
@@ -213,43 +238,35 @@ where
 mod tests {
     use super::*;
 
+    const GOOD_BOARD: Board<4> = Board([
+        Row([1, 2, 3, 4]),
+        Row([2, 3, 4, 1]),
+        Row([3, 4, 1, 2]),
+        Row([4, 1, 2, 3]),
+    ]);
+
+    const GOOD_BOARD_TRANSPOSED: Board<4> = Board([
+        Row([1, 2, 3, 4]),
+        Row([2, 3, 4, 1]),
+        Row([3, 4, 1, 2]),
+        Row([4, 1, 2, 3]),
+    ]);
+
+    const BAD_BOARD: Board<4> = Board([
+        Row([1, 2, 3, 4]),
+        Row([1, 2, 3, 4]),
+        Row([1, 2, 3, 4]),
+        Row([1, 2, 3, 4]),
+    ]);
+
     #[test]
     fn test_board_fitness() {
-        let good_board = good_test_board();
-        let bad_board = bad_test_board();
-
-        assert_eq!(0, good_board.fitness());
-        assert_eq!(12, bad_board.fitness());
+        assert_eq!(0, GOOD_BOARD.fitness());
+        assert_eq!(12, BAD_BOARD.fitness());
     }
 
     #[test]
     fn test_board_transpose() {
-        let board = good_test_board();
-        let expected = Board([
-            Row([1, 2, 3, 4]),
-            Row([2, 3, 4, 1]),
-            Row([3, 4, 1, 2]),
-            Row([4, 1, 2, 3]),
-        ]);
-
-        assert_eq!(expected, board.transpose());
-    }
-
-    const fn good_test_board() -> Board<4> {
-        Board([
-            Row([1, 2, 3, 4]),
-            Row([2, 3, 4, 1]),
-            Row([3, 4, 1, 2]),
-            Row([4, 1, 2, 3]),
-        ])
-    }
-
-    const fn bad_test_board() -> Board<4> {
-        Board([
-            Row([1, 2, 3, 4]),
-            Row([1, 2, 3, 4]),
-            Row([1, 2, 3, 4]),
-            Row([1, 2, 3, 4]),
-        ])
+        assert_eq!(GOOD_BOARD_TRANSPOSED, GOOD_BOARD.transpose());
     }
 }
