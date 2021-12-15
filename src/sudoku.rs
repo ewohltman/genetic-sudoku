@@ -136,13 +136,24 @@ impl<const N: usize> Board<N> {
             for value in &row.0 {
                 scorer.check(*value);
             }
+
             total_duplicates += scorer.score();
         }
 
         total_duplicates
     }
 
-    fn count_box_duplicates(&self) -> u8 {
+    /// Counts box duplicates.
+    ///
+    /// Iterates through the Board's sub-boxes to count duplicated values.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the size of the Board, N, is not a perfect square >= 4 or <=
+    /// 25.
+    #[inline]
+    #[must_use]
+    pub fn count_box_duplicates(&self) -> u8 {
         let mut total_duplicates: u8 = 0;
 
         // XXX This could be a proper integer square root.
@@ -154,7 +165,7 @@ impl<const N: usize> Board<N> {
             9 => 3,
             16 => 4,
             25 => 5,
-            _ => panic!("puzzle size N must be one of (2..5)**2"),
+            _ => panic!("puzzle size N must be one of (2..5)^2"),
         };
 
         for row in (0..N).step_by(box_size) {
@@ -166,6 +177,7 @@ impl<const N: usize> Board<N> {
                         scorer.check(*value);
                     }
                 }
+
                 total_duplicates += scorer.score();
             }
         }
@@ -260,16 +272,16 @@ mod tests {
 
     const GOOD_BOARD: Board<4> = Board([
         Row([1, 2, 3, 4]),
-        Row([2, 3, 4, 1]),
         Row([3, 4, 1, 2]),
-        Row([4, 1, 2, 3]),
+        Row([4, 3, 2, 1]),
+        Row([2, 1, 4, 3]),
     ]);
 
     const GOOD_BOARD_TRANSPOSED: Board<4> = Board([
-        Row([1, 2, 3, 4]),
-        Row([2, 3, 4, 1]),
-        Row([3, 4, 1, 2]),
-        Row([4, 1, 2, 3]),
+        Row([1, 3, 4, 2]),
+        Row([2, 4, 3, 1]),
+        Row([3, 1, 2, 4]),
+        Row([4, 2, 1, 3]),
     ]);
 
     const BAD_BOARD: Board<4> = Board([
@@ -280,13 +292,42 @@ mod tests {
     ]);
 
     #[test]
+    fn test_scorer() {
+        test_scorer_no_duplicates();
+        test_scorer_with_duplicates();
+    }
+
+    #[test]
     fn test_board_fitness() {
         assert_eq!(0, GOOD_BOARD.fitness());
-        assert_eq!(12, BAD_BOARD.fitness());
+        assert_eq!(20, BAD_BOARD.fitness());
     }
 
     #[test]
     fn test_board_transpose() {
         assert_eq!(GOOD_BOARD_TRANSPOSED, GOOD_BOARD.transpose());
+    }
+
+    fn test_scorer_no_duplicates() {
+        let mut scorer = Scorer::default();
+
+        // Since Scorer.seen is u64, it supports up to 49 before overflowing
+        for i in 1..=49 {
+            scorer.check(i);
+        }
+
+        assert_eq!(0, scorer.score());
+    }
+
+    fn test_scorer_with_duplicates() {
+        let mut scorer = Scorer::default();
+
+        scorer.check(1);
+        scorer.check(1); // One duplicate
+        scorer.check(2);
+        scorer.check(2); // Two duplicates
+        scorer.check(2); // Three duplicates
+
+        assert_eq!(3, scorer.score());
     }
 }

@@ -14,10 +14,10 @@ use rayon::iter::Zip;
 use rayon::prelude::*;
 use rayon::vec::IntoIter;
 
-pub const NUM_POPULATION: usize = 100;
-const NUM_SURVIVORS: usize = NUM_POPULATION / 2;
+pub const POPULATION: usize = 100;
+const NUM_SURVIVORS: usize = POPULATION / 2;
 const NUM_PARENT_PAIRS: usize = NUM_SURVIVORS / 2;
-const NUM_CHILDREN_PER_PARENT_PAIRS: usize = NUM_POPULATION / NUM_PARENT_PAIRS;
+const NUM_CHILDREN_PER_PARENT_PAIRS: usize = POPULATION / NUM_PARENT_PAIRS;
 const MUTATION_RATE: u8 = 5; // Percent
 
 /// Generates an initial population.
@@ -36,7 +36,7 @@ pub fn generate_initial_population<const N: usize, const M: usize>() -> ArrayVec
     let mut rng = thread_rng();
     let mut boards: ArrayVec<Board<N>, M> = ArrayVec::new();
 
-    for _ in 0..NUM_POPULATION {
+    for _ in 0..POPULATION {
         let mut board: ArrayVec<Row<N>, N> = ArrayVec::new_const();
 
         for _ in 0..N {
