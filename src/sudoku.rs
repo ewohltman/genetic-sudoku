@@ -36,6 +36,26 @@ impl<const N: usize> Display for Row<N> {
     }
 }
 
+#[derive(Debug, Default)]
+struct Scorer {
+    seen: u64,
+    score: u8,
+}
+
+impl Scorer {
+    fn check(&mut self, digit: u8) {
+        let bit = 1 << digit;
+        if self.seen & bit != 0 {
+            self.score += 1;
+        }
+        self.seen |= bit;
+    }
+
+    const fn score(self) -> u8 {
+        self.score
+    }
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Board<const N: usize>(pub [Row<N>; N]);
 
@@ -100,27 +120,54 @@ impl<const N: usize> Board<N> {
     #[inline]
     #[must_use]
     pub fn fitness(&self) -> u8 {
-        self.count_duplicates() + self.transpose().count_duplicates()
+        self.count_row_duplicates()
+            + self.transpose().count_row_duplicates()
+            + self.count_box_duplicates()
     }
 
     #[inline]
     #[must_use]
-    pub fn count_duplicates(&self) -> u8 {
+    pub fn count_row_duplicates(&self) -> u8 {
         let mut total_duplicates: u8 = 0;
 
         for row in self.0 {
-            let mut duplicates: u8 = 0;
-            let mut duplicate_counts: [u8; N] = [0; N];
+            let mut scorer = Scorer::default();
 
             for value in &row.0 {
-                duplicate_counts[(*value - 1) as usize] += 1;
-
-                if duplicate_counts[(*value - 1) as usize] > 1 {
-                    duplicates += 1;
-                }
+                scorer.check(*value);
             }
+            total_duplicates += scorer.score();
+        }
 
-            total_duplicates += duplicates;
+        total_duplicates
+    }
+
+    fn count_box_duplicates(&self) -> u8 {
+        let mut total_duplicates: u8 = 0;
+
+        // XXX This could be a proper integer square root.
+        // Realistically these are the only sizes that
+        // matter anyhow, and theres no built-in integer
+        // sqrt() in Rust.
+        let box_size = match N {
+            4 => 2,
+            9 => 3,
+            16 => 4,
+            25 => 5,
+            _ => panic!("puzzle size N must be one of (2..5)**2"),
+        };
+
+        for row in (0..N).step_by(box_size) {
+            for col in (0..N).step_by(box_size) {
+                let mut scorer = Scorer::default();
+
+                for r in &self.0[row..row + box_size] {
+                    for value in &r.0[col..col + box_size] {
+                        scorer.check(*value);
+                    }
+                }
+                total_duplicates += scorer.score();
+            }
         }
 
         total_duplicates
@@ -149,6 +196,17 @@ impl<const N: usize> Display for Board<N> {
 
         Ok(())
     }
+}
+
+#[inline]
+#[must_use]
+pub const fn default4() -> Board<4> {
+    Board([
+        Row([1, 0, 0, 4]),
+        Row([0, 4, 1, 2]),
+        Row([2, 0, 4, 3]),
+        Row([4, 3, 0, 0]),
+    ])
 }
 
 #[inline]

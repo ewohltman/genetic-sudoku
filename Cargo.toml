@@ -2,6 +2,11 @@
 name = "genetic-sudoku"
 version = "0.1.0"
 edition = "2021"
+repository = "http://github.com/ewohltman/genetic-sudoku"
+keywords = ["sudoku", "solver", "genetic algorithms"]
+categories = ["Algorithms", "Games"]
+description = "Genetic Algorithm Sudoku solver"
+license-file = "LICENSE"
 
 [dependencies]
 arrayvec = "0.7.2"
