@@ -13,12 +13,23 @@ use rand::{distributions::Uniform, thread_rng, Rng};
 use rayon::iter::Zip;
 use rayon::prelude::*;
 use rayon::vec::IntoIter;
+use static_assertions::const_assert_eq;
 
-pub const POPULATION: usize = 100;
-const NUM_SURVIVORS: usize = POPULATION / 2;
-const NUM_PARENT_PAIRS: usize = NUM_SURVIVORS / 2;
-const NUM_CHILDREN_PER_PARENT_PAIRS: usize = POPULATION / NUM_PARENT_PAIRS;
-const MUTATION_RATE: u8 = 5; // Percent
+pub const POPULATION: usize = 1000;
+const SELECTION_RATE: f32 = 0.1;
+const MUTATION_RATE: f32 = 0.01;
+
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss
+)]
+const SURVIVORS: usize = ((POPULATION as f32) * SELECTION_RATE) as usize;
+const_assert_eq!(100, SURVIVORS);
+
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+const CHILDREN_PER_PARENT_PAIRS: usize = (2.0 / SELECTION_RATE) as usize;
+const_assert_eq!(20, CHILDREN_PER_PARENT_PAIRS);
 
 /// Generates an initial population.
 ///
@@ -111,12 +122,12 @@ fn next_generation<const N: usize, const M: usize>(
 
 fn natural_selection<const N: usize, const M: usize>(
     mut population_scores: ArrayVec<(Board<N>, u8), M>,
-) -> ArrayVec<Board<N>, NUM_SURVIVORS> {
+) -> ArrayVec<Board<N>, SURVIVORS> {
     population_scores.par_sort_unstable_by_key(|(_, score)| *score);
 
     ArrayVec::from_iter(
         population_scores
-            .drain(..NUM_SURVIVORS)
+            .drain(..SURVIVORS)
             .collect::<Vec<(Board<N>, u8)>>()
             .into_par_iter()
             .map(|(survivor, _)| survivor)
@@ -150,14 +161,14 @@ fn make_children<const N: usize>(parents: (Board<N>, Board<N>)) -> Vec<Board<N>>
     let Board(parent_x) = parents.0;
     let Board(parent_y) = parents.1;
 
-    let inherits_from_range: Uniform<u8> = Uniform::from(0..=1);
-    let mutation_chance_range: Uniform<u8> = Uniform::from(0..=100);
     let max_digit = u8::try_from(N).expect("digit size exceeds 255");
+    let inherits_from_range: Uniform<u8> = Uniform::from(0..=1);
     let mutation_values_range: Uniform<u8> = Uniform::from(1..=max_digit);
+    let mutation_chance_range: Uniform<f32> = Uniform::from(0.0..=1.0);
     let mut rng = thread_rng();
-    let mut children: ArrayVec<Board<N>, NUM_CHILDREN_PER_PARENT_PAIRS> = ArrayVec::new_const();
+    let mut children: ArrayVec<Board<N>, CHILDREN_PER_PARENT_PAIRS> = ArrayVec::new_const();
 
-    for _ in 0..NUM_CHILDREN_PER_PARENT_PAIRS {
+    for _ in 0..CHILDREN_PER_PARENT_PAIRS {
         let mut child: ArrayVec<Row<N>, N> = ArrayVec::new_const();
 
         for i in 0..N {
