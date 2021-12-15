@@ -161,8 +161,8 @@ impl<const N: usize> Board<N> {
             for col in (0..N).step_by(box_size) {
                 let mut scorer = Scorer::default();
 
-                for r in &self.0[row..row+box_size] {
-                    for value in &r.0[col..col+box_size] {
+                for r in &self.0[row..row + box_size] {
+                    for value in &r.0[col..col + box_size] {
                         scorer.check(*value);
                     }
                 }
@@ -196,6 +196,17 @@ impl<const N: usize> Display for Board<N> {
 
         Ok(())
     }
+}
+
+#[inline]
+#[must_use]
+pub const fn default4() -> Board<4> {
+    Board([
+        Row([1, 0, 0, 4]),
+        Row([0, 4, 1, 2]),
+        Row([2, 0, 4, 3]),
+        Row([4, 3, 0, 0]),
+    ])
 }
 
 #[inline]
