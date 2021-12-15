@@ -13,23 +13,19 @@ use rand::{distributions::Uniform, thread_rng, Rng};
 use rayon::iter::Zip;
 use rayon::prelude::*;
 use rayon::vec::IntoIter;
-use static_assertions::const_assert_eq;
 
-pub const POPULATION: usize = 1000;
-const SELECTION_RATE: f32 = 0.1;
-const MUTATION_RATE: f32 = 0.01;
-
+pub const POPULATION: usize = 10000;
+const SELECTION_RATE: f32 = 0.5;
+const MUTATION_RATE: f32 = 0.05;
+const RESTART: u64 = 100; // Generations per restart
 #[allow(
     clippy::cast_sign_loss,
     clippy::cast_possible_truncation,
     clippy::cast_precision_loss
 )]
 const SURVIVORS: usize = ((POPULATION as f32) * SELECTION_RATE) as usize;
-const_assert_eq!(100, SURVIVORS);
-
 #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
 const CHILDREN_PER_PARENT_PAIRS: usize = (2.0 / SELECTION_RATE) as usize;
-const_assert_eq!(20, CHILDREN_PER_PARENT_PAIRS);
 
 /// Generates an initial population.
 ///
@@ -45,7 +41,7 @@ pub fn generate_initial_population<const N: usize, const M: usize>() -> ArrayVec
     let max_digit = u8::try_from(N).expect("digit size exceeds 255");
     let range = Uniform::from(1..=max_digit);
     let mut rng = thread_rng();
-    let mut boards: ArrayVec<Board<N>, M> = ArrayVec::new();
+    let mut boards: ArrayVec<Board<N>, M> = ArrayVec::new_const();
 
     for _ in 0..POPULATION {
         let mut board: ArrayVec<Row<N>, N> = ArrayVec::new_const();
@@ -84,6 +80,7 @@ pub fn generate_initial_population<const N: usize, const M: usize>() -> ArrayVec
 pub fn run_simulation<const N: usize, const M: usize>(
     base: &Board<N>,
     population: ArrayVec<Board<N>, M>,
+    generation: u64,
 ) -> Result<Board<N>, NoSolutionFound<N, M>> {
     let population_scores: Result<Vec<(Board<N>, u8)>, Board<N>> = population
         .into_par_iter()
@@ -103,7 +100,7 @@ pub fn run_simulation<const N: usize, const M: usize>(
         Err(valid_solution) => Ok(valid_solution),
         Ok(population) => {
             let candidates: ArrayVec<(Board<N>, u8), M> = population.into_iter().collect();
-            let next_generation = next_generation(candidates);
+            let next_generation = next_generation(candidates, generation);
             Err(NoSolutionFound { next_generation })
         }
     }
@@ -111,7 +108,12 @@ pub fn run_simulation<const N: usize, const M: usize>(
 
 fn next_generation<const N: usize, const M: usize>(
     population_scores: ArrayVec<(Board<N>, u8), M>,
+    generation: u64,
 ) -> ArrayVec<Board<N>, M> {
+    if (generation % RESTART == 0) && (generation != 0) {
+        return generate_initial_population();
+    }
+
     ArrayVec::from_iter(
         make_parents(natural_selection(population_scores))
             .into_par_iter()

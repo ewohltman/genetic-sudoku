@@ -28,7 +28,7 @@ fn main() {
         let mut population = generate_initial_population::<{ BASE.size() }, { POPULATION }>();
 
         loop {
-            population = match run_simulation(&BASE, population) {
+            population = match run_simulation(&BASE, population, generation) {
                 Ok(_) => {
                     total_generations += generation;
 
