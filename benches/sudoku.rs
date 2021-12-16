@@ -5,10 +5,8 @@
     clippy::nursery,
     clippy::cargo
 )]
-#[macro_use]
-extern crate bencher;
 
-use bencher::Bencher;
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use genetic_sudoku::sudoku::{Board, Row};
 
 const BAD_BOARD: Board<4> = Board([
@@ -18,9 +16,21 @@ const BAD_BOARD: Board<4> = Board([
     Row([1, 2, 3, 4]),
 ]);
 
-fn bench_count_duplicates(bench: &mut Bencher) {
-    bench.iter(|| BAD_BOARD.count_duplicates());
+fn bench_count_row_duplicates(c: &mut Criterion) {
+    c.bench_function("count_row_duplicates", |b| {
+        b.iter(|| black_box(BAD_BOARD).count_row_duplicates());
+    });
 }
 
-benchmark_group!(benches, bench_count_duplicates);
-benchmark_main!(benches);
+fn bench_count_box_duplicates(c: &mut Criterion) {
+    c.bench_function("count_box_duplicates", |b| {
+        b.iter(|| black_box(BAD_BOARD).count_box_duplicates());
+    });
+}
+
+criterion_group!(
+    benches,
+    bench_count_row_duplicates,
+    bench_count_box_duplicates
+);
+criterion_main!(benches);

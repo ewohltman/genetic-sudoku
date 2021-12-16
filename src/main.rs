@@ -7,7 +7,7 @@
 )]
 
 use genetic_sudoku::{
-    genetics::{generate_initial_population, run_simulation, NUM_POPULATION},
+    genetics::{generate_initial_population, run_simulation, POPULATION},
     sudoku,
     sudoku::Board,
 };
@@ -25,7 +25,7 @@ fn main() {
 
         let now = Instant::now();
         let mut generation: u64 = 0;
-        let mut population = generate_initial_population::<{ BASE.size() }, { NUM_POPULATION }>();
+        let mut population = generate_initial_population::<{ BASE.size() }, { POPULATION }>();
 
         loop {
             population = match run_simulation(&BASE, population) {
