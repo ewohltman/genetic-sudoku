@@ -10,6 +10,26 @@ use arrayvec::ArrayVec;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 
+#[derive(Debug, Default)]
+struct Scorer {
+    seen: u64,
+    score: u8,
+}
+
+impl Scorer {
+    fn check(&mut self, digit: u8) {
+        let bit = 1 << digit;
+        if self.seen & bit != 0 {
+            self.score += 1;
+        }
+        self.seen |= bit;
+    }
+
+    const fn score(self) -> u8 {
+        self.score
+    }
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Row<const N: usize>(pub [u8; N]);
 
@@ -33,26 +53,6 @@ impl<const N: usize> Display for Row<N> {
         }
 
         Ok(())
-    }
-}
-
-#[derive(Debug, Default)]
-struct Scorer {
-    seen: u64,
-    score: u8,
-}
-
-impl Scorer {
-    fn check(&mut self, digit: u8) {
-        let bit = 1 << digit;
-        if self.seen & bit != 0 {
-            self.score += 1;
-        }
-        self.seen |= bit;
-    }
-
-    const fn score(self) -> u8 {
-        self.score
     }
 }
 
@@ -237,8 +237,12 @@ impl<const N: usize> Board<N> {
 impl<const N: usize> Display for Board<N> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        for row in &self.0 {
-            writeln!(f, "{}", row)?;
+        for (i, row) in (&self.0).iter().enumerate() {
+            if i < (&self.0).len() - 1 {
+                writeln!(f, "{}", row)?;
+            } else {
+                write!(f, "{}", row)?;
+            }
         }
 
         Ok(())
