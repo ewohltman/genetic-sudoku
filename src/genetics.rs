@@ -14,7 +14,7 @@ use rayon::iter::Zip;
 use rayon::prelude::*;
 use rayon::vec::IntoIter;
 
-pub const MAX_POPULATION: usize = 100;
+pub const MAX_POPULATION: usize = 1000;
 
 pub struct GAParams {
     population: usize,
