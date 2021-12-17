@@ -14,6 +14,9 @@ use genetic_sudoku::{
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+// The board size for puzzles. Change this for larger or smaller boards.
+const BOARD_SIZE: usize = 9;
+
 fn parse_args() -> Result<(PathBuf, GAParams, bool), Box<dyn std::error::Error>> {
     let matches = App::new("genetic-sudoku")
         .arg(
@@ -84,7 +87,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let now = Instant::now();
         let mut generation: u64 = 0;
-        let mut population = generate_initial_population::<9, MAX_POPULATION>(&params);
+        let mut population = generate_initial_population::<BOARD_SIZE, MAX_POPULATION>(&params);
 
         loop {
             population = match run_simulation(&params, generation, &board, population) {
