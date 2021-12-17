@@ -87,3 +87,17 @@ randomly "mutate" and generate a whole new value
     * The other 95% of the time, there is a 50% chance to "inherit" the value
 from one parent, and a 50% chance to "inherit" from the other parent
 * Loop this process until a valid solution is found
+
+## Acknowledgements
+
+The Sudoku boards in `boards/mantere-koljonen` are
+from
+
+> Mantere, Timo and Janne Koljonen (2008). Solving and
+> Analyzing Sudokus with Cultural Algorithms. In Proceedings
+> of 2008 IEEE World Congress on Computational Intelligence
+> (WCCI 2008), 1-6 June, Hong Kong, China, pages 4054-4061.
+
+as made available
+[here](http://lipas.uwasa.fi/~timan/sudoku/).
+Thanks much to the authors for collecting these.
