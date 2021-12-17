@@ -7,20 +7,14 @@
 )]
 
 use clap::{App, Arg};
-use std::path::Path;
-
 use genetic_sudoku::{
-    genetics::{
-        generate_initial_population,
-        run_simulation,
-        GAParams,
-        MAX_POPULATION,
-    },
+    genetics::{generate_initial_population, run_simulation, GAParams, MAX_POPULATION},
     sudoku::Board,
 };
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-fn main() {
+fn parse_args() -> Result<(PathBuf, GAParams, bool), Box<dyn std::error::Error>> {
     let matches = App::new("genetic-sudoku")
         .arg(
             Arg::with_name("population")
@@ -44,35 +38,46 @@ fn main() {
                 .value_name("F"),
         )
         .arg(
+            Arg::with_name("restart")
+                .help("number of generations to restart population")
+                .long("restart")
+                .takes_value(true)
+                .value_name("R"),
+        )
+        .arg(
+            Arg::with_name("bench")
+                .help("runs program in benchmark mode")
+                .long("bench")
+                .takes_value(false),
+        )
+        .arg(
             Arg::with_name("BOARD")
                 .help("board to solve")
                 .required(true),
         )
         .get_matches();
-    let path = Path::new(matches.value_of("BOARD").unwrap());
 
-    let population = matches
-        .value_of("population")
-        .unwrap_or("100")
-        .parse()
-        .unwrap();
-    let selection = matches
-        .value_of("selection")
-        .unwrap_or("0.5")
-        .parse()
-        .unwrap();
-    let mutation = matches
-        .value_of("mutation")
-        .unwrap_or("0.05")
-        .parse()
-        .unwrap();
-    let params = GAParams::new(population, selection, mutation);
+    let path = Path::new(matches.value_of("BOARD").unwrap()).to_owned();
+    let population = matches.value_of("population").unwrap_or("100").parse()?;
+    let selection = matches.value_of("selection").unwrap_or("0.5").parse()?;
+    let mutation = matches.value_of("mutation").unwrap_or("0.05").parse()?;
+    let restart = match matches.value_of("restart") {
+        None => None,
+        Some(restart) => Some(restart.parse()?),
+    };
+    let benchmark = matches.is_present("bench");
+    let params = GAParams::new(population, selection, mutation, restart);
+
+    Ok((path, params, benchmark))
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let (path, params, benchmark) = parse_args()?;
+    let board = Board::read(path)?;
 
     let start = Instant::now();
     let mut runs: u32 = 0;
     let mut total_generations: u64 = 0;
-
-    let board = Board::read(path).unwrap();
 
     loop {
         runs += 1;
@@ -82,8 +87,8 @@ fn main() {
         let mut population = generate_initial_population::<9, MAX_POPULATION>(&params);
 
         loop {
-            population = match run_simulation(&params, &board, population) {
-                Ok(_) => {
+            population = match run_simulation(&params, generation, &board, population) {
+                Ok(solution) => {
                     total_generations += generation;
 
                     println!(
@@ -93,6 +98,11 @@ fn main() {
                         total_generations / u64::from(runs),
                         start.elapsed() / runs
                     );
+
+                    if !benchmark {
+                        println!("{}", solution);
+                        return Ok(());
+                    }
 
                     break;
                 }
