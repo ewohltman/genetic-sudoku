@@ -14,32 +14,51 @@ use rayon::iter::Zip;
 use rayon::prelude::*;
 use rayon::vec::IntoIter;
 
-pub struct GAParams {
-    pub population: usize,
-    pub num_survivors: usize,
-    pub num_parent_pairs: usize,
-    pub num_children_per_parent_pairs: usize,
-    pub mutation_rate: f32,
-}
-
 pub const MAX_POPULATION: usize = 100;
 
+pub struct GAParams {
+    population: usize,
+    num_survivors: usize,
+    num_children_per_parent_pairs: usize,
+    mutation_rate: f32,
+    restart: Option<u64>,
+}
+
 impl GAParams {
+    /// Returns new GA parameters.
+    ///
+    /// # Arguments
+    ///
+    /// * `population` - the size of the population to use
+    /// * `frac_reduction` - the fractional value of survivors per generation
+    /// * `mutation_rate` - the rate at which values should mutate
+    /// * `restart` - the number of generations before a population restart
+    ///
+    /// # Panics
+    /// Panics if the given population is greater than `MAX_POPULATION`.
+    #[inline]
+    #[must_use]
     pub fn new(
         population: usize,
         frac_reduction: f32,
         mutation_rate: f32,
+        restart: Option<u64>,
     ) -> Self {
         assert!(population <= MAX_POPULATION);
+        #[allow(
+            clippy::cast_sign_loss,
+            clippy::cast_possible_truncation,
+            clippy::cast_precision_loss
+        )]
         let num_survivors = (population as f32 * frac_reduction).floor() as usize;
         let num_parent_pairs = num_survivors / 2;
         let num_children_per_parent_pairs = population / num_parent_pairs;
         Self {
             population,
             num_survivors,
-            num_parent_pairs,
             num_children_per_parent_pairs,
             mutation_rate,
+            restart,
         }
     }
 }
@@ -64,7 +83,7 @@ pub fn generate_initial_population<const N: usize, const M: usize>(
     let max_digit = u8::try_from(N).expect("digit size exceeds 255");
     let range = Uniform::from(1..=max_digit);
     let mut rng = thread_rng();
-    let mut boards: ArrayVec<Board<N>, M> = ArrayVec::new();
+    let mut boards: ArrayVec<Board<N>, M> = ArrayVec::new_const();
 
     for _ in 0..params.population {
         let mut board: ArrayVec<Row<N>, N> = ArrayVec::new_const();
@@ -93,6 +112,7 @@ pub fn generate_initial_population<const N: usize, const M: usize>(
 /// # Arguments
 ///
 /// * `params` - GA parameters
+/// * `generation` - the current generation counter
 /// * `base` - The base Board to find solutions for
 /// * `population` - The population to evaluate fitness for
 ///
@@ -103,6 +123,7 @@ pub fn generate_initial_population<const N: usize, const M: usize>(
 #[inline]
 pub fn run_simulation<const N: usize, const M: usize>(
     params: &GAParams,
+    generation: u64,
     base: &Board<N>,
     population: ArrayVec<Board<N>, M>,
 ) -> Result<Board<N>, NoSolutionFound<N, M>> {
@@ -124,7 +145,7 @@ pub fn run_simulation<const N: usize, const M: usize>(
         Err(valid_solution) => Ok(valid_solution),
         Ok(population) => {
             let candidates: ArrayVec<(Board<N>, u8), M> = population.into_iter().collect();
-            let next_generation = next_generation(params, candidates);
+            let next_generation = next_generation(params, generation, candidates);
             Err(NoSolutionFound { next_generation })
         }
     }
@@ -132,8 +153,15 @@ pub fn run_simulation<const N: usize, const M: usize>(
 
 fn next_generation<const N: usize, const M: usize>(
     params: &GAParams,
+    generation: u64,
     population_scores: ArrayVec<(Board<N>, u8), M>,
 ) -> ArrayVec<Board<N>, M> {
+    if let Some(restart) = params.restart {
+        if (generation % restart == 0) && (generation != 0) {
+            return generate_initial_population(params);
+        }
+    }
+
     ArrayVec::from_iter(
         make_parents(natural_selection(params, population_scores))
             .into_par_iter()
@@ -187,8 +215,8 @@ fn make_children<const N: usize, const M: usize>(
     let Board(parent_x) = parents.0;
     let Board(parent_y) = parents.1;
 
-    let inherits_from_range: Uniform<u8> = Uniform::from(0..=1);
     let max_digit = u8::try_from(N).expect("digit size exceeds 255");
+    let inherits_from_range: Uniform<u8> = Uniform::from(0..=1);
     let mutation_values_range: Uniform<u8> = Uniform::from(1..=max_digit);
     let mut rng = thread_rng();
     let mut children: ArrayVec<Board<N>, M> = ArrayVec::new_const();
