@@ -19,20 +19,27 @@ pub struct GAParams {
     pub num_survivors: usize,
     pub num_parent_pairs: usize,
     pub num_children_per_parent_pairs: usize,
-    pub mutation_rate: u8,
+    pub mutation_rate: f32,
 }
 
 pub const MAX_POPULATION: usize = 100;
 
-impl Default for GAParams {
-    fn default() -> Self {
-        static_assertions::const_assert!(MAX_POPULATION >= 100);
+impl GAParams {
+    pub fn new(
+        population: usize,
+        frac_reduction: f32,
+        mutation_rate: f32,
+    ) -> Self {
+        assert!(population <= MAX_POPULATION);
+        let num_survivors = (population as f32 * frac_reduction).floor() as usize;
+        let num_parent_pairs = num_survivors / 2;
+        let num_children_per_parent_pairs = population / num_parent_pairs;
         Self {
-            population: 100,
-            num_survivors: 50,
-            num_parent_pairs: 25,
-            num_children_per_parent_pairs: 4,
-            mutation_rate: 5,
+            population,
+            num_survivors,
+            num_parent_pairs,
+            num_children_per_parent_pairs,
+            mutation_rate,
         }
     }
 }
@@ -181,7 +188,6 @@ fn make_children<const N: usize, const M: usize>(
     let Board(parent_y) = parents.1;
 
     let inherits_from_range: Uniform<u8> = Uniform::from(0..=1);
-    let mutation_chance_range: Uniform<u8> = Uniform::from(0..=100);
     let max_digit = u8::try_from(N).expect("digit size exceeds 255");
     let mutation_values_range: Uniform<u8> = Uniform::from(1..=max_digit);
     let mut rng = thread_rng();
@@ -196,9 +202,9 @@ fn make_children<const N: usize, const M: usize>(
             let mut child_values: ArrayVec<u8, N> = ArrayVec::new_const();
 
             for j in 0..N {
-                let mutation_chance = rng.sample(mutation_chance_range);
+                let mutation_chance: f32 = rng.gen();
 
-                if mutation_chance <= params.mutation_rate {
+                if mutation_chance < params.mutation_rate {
                     child_values.push(rng.sample(mutation_values_range));
                 } else {
                     match rng.sample(inherits_from_range) {
