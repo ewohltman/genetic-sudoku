@@ -6,11 +6,11 @@
     clippy::cargo
 )]
 
-use clap::{Arg, App};
+use clap::{App, Arg};
 use std::path::Path;
 
 use genetic_sudoku::{
-    genetics::{generate_initial_population, run_simulation, POPULATION},
+    genetics::{generate_initial_population, run_simulation, GAParams, MAX_POPULATION},
     sudoku::Board,
 };
 use std::time::Instant;
@@ -20,7 +20,7 @@ fn main() {
         .arg(
             Arg::with_name("BOARD")
                 .help("board to solve")
-                .required(true)
+                .required(true),
         )
         .get_matches();
     let path = Path::new(matches.value_of("BOARD").unwrap());
@@ -28,6 +28,7 @@ fn main() {
     let start = Instant::now();
     let mut runs: u32 = 0;
     let mut total_generations: u64 = 0;
+    let params = GAParams::default();
 
     let board = Board::read(path).unwrap();
 
@@ -36,10 +37,10 @@ fn main() {
 
         let now = Instant::now();
         let mut generation: u64 = 0;
-        let mut population = generate_initial_population::<9, { POPULATION }>();
+        let mut population = generate_initial_population::<9, MAX_POPULATION>(&params);
 
         loop {
-            population = match run_simulation(&board, population) {
+            population = match run_simulation(&params, &board, population) {
                 Ok(_) => {
                     total_generations += generation;
 
