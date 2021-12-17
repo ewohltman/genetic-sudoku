@@ -197,6 +197,41 @@ impl<const N: usize> Board<N> {
 
         Self(transposed)
     }
+
+    /// Read a board from a file.
+    ///
+    /// # Errors
+    ///
+    /// Fails if file is nonexistent, unreadable, or of the wrong size.
+    pub fn read<P: AsRef<std::path::Path>>(path: P) -> Result<Self, std::io::Error> {
+        let board = std::fs::read_to_string(path)?;
+        let format_error =
+            || std::io::Error::new(std::io::ErrorKind::InvalidData, "malformed sudoku board");
+        let dim = board.lines().next().ok_or_else(format_error)?.len();
+        if dim != N {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "wrong board size",
+            ));
+        }
+        let mut board_array: [Row<N>; N] = [<Row<N>>::default(); N];
+        let mut chars = board.chars();
+        for r in &mut board_array {
+            let mut row = Row::default();
+            for c in &mut row.0 {
+                let ch = chars.next().ok_or_else(format_error)?;
+                #[allow(clippy::cast_possible_truncation)]
+                let d = ch.to_digit(N as u32 + 1).ok_or_else(format_error)? as u8;
+                *c = d;
+            }
+            *r = row;
+            let ch = chars.next().ok_or_else(format_error)?;
+            if ch != '\n' {
+                return Err(format_error());
+            }
+        }
+        Ok(Self(board_array))
+    }
 }
 
 impl<const N: usize> Display for Board<N> {
@@ -208,49 +243,6 @@ impl<const N: usize> Display for Board<N> {
 
         Ok(())
     }
-}
-
-#[inline]
-#[must_use]
-pub const fn default4() -> Board<4> {
-    Board([
-        Row([1, 0, 0, 4]),
-        Row([0, 4, 1, 2]),
-        Row([2, 0, 4, 3]),
-        Row([4, 3, 0, 0]),
-    ])
-}
-
-#[inline]
-#[must_use]
-pub const fn default() -> Board<9> {
-    Board([
-        Row([0, 0, 4, 0, 5, 0, 0, 0, 0]),
-        Row([9, 0, 0, 7, 3, 4, 6, 0, 0]),
-        Row([0, 0, 3, 0, 2, 1, 0, 4, 9]),
-        Row([0, 3, 5, 0, 9, 0, 4, 8, 0]),
-        Row([0, 9, 0, 0, 0, 0, 0, 3, 0]),
-        Row([0, 7, 6, 0, 1, 0, 9, 2, 0]),
-        Row([3, 1, 0, 9, 7, 0, 2, 0, 0]),
-        Row([0, 0, 9, 1, 8, 2, 0, 0, 3]),
-        Row([0, 0, 0, 0, 6, 0, 1, 0, 0]),
-    ])
-}
-
-#[inline]
-#[must_use]
-pub const fn al_escargot() -> Board<9> {
-    Board([
-        Row([1, 0, 0, 0, 0, 7, 0, 9, 0]),
-        Row([0, 3, 0, 0, 2, 0, 0, 0, 8]),
-        Row([0, 0, 9, 6, 0, 0, 5, 0, 0]),
-        Row([0, 0, 5, 3, 0, 0, 9, 0, 0]),
-        Row([0, 1, 0, 0, 8, 0, 0, 0, 2]),
-        Row([6, 0, 0, 0, 0, 4, 0, 0, 0]),
-        Row([3, 0, 0, 0, 0, 0, 0, 1, 0]),
-        Row([0, 4, 0, 0, 0, 0, 0, 0, 7]),
-        Row([0, 0, 7, 0, 0, 0, 3, 0, 0]),
-    ])
 }
 
 fn apply_overlay<T, F, const N: usize>(base: &[T; N], overlay: &[T; N], f: F) -> [T; N]

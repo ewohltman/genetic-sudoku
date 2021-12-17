@@ -8,27 +8,27 @@
 
 use genetic_sudoku::{
     genetics::{generate_initial_population, run_simulation, POPULATION},
-    sudoku,
     sudoku::Board,
 };
 use std::time::Instant;
-
-const BASE: Board<9> = sudoku::default();
 
 fn main() {
     let start = Instant::now();
     let mut runs: u32 = 0;
     let mut total_generations: u64 = 0;
 
+    let path = std::env::args().nth(1).unwrap();
+    let board = Board::read(path).unwrap();
+
     loop {
         runs += 1;
 
         let now = Instant::now();
         let mut generation: u64 = 0;
-        let mut population = generate_initial_population::<{ BASE.size() }, { POPULATION }>();
+        let mut population = generate_initial_population::<9, { POPULATION }>();
 
         loop {
-            population = match run_simulation(&BASE, population) {
+            population = match run_simulation(&board, population) {
                 Ok(_) => {
                     total_generations += generation;
 
