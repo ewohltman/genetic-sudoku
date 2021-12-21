@@ -99,17 +99,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         generation,
                         now.elapsed(),
                     );
-                    if benchmark {
-                        println!(
-                            "| Average Generation: {} | Average Duration: {:?}",
-                            total_generations / u64::from(runs),
-                            start.elapsed() / runs
-                        );
-                    } else {
-                        println!();
-                        println!("{}", solution);
+
+                    if !benchmark {
+                        println!("\n{}", solution);
                         return Ok(());
                     }
+
+                    println!(
+                        " | Average Generation: {} | Average Duration: {:?}",
+                        total_generations / u64::from(runs),
+                        start.elapsed() / runs
+                    );
 
                     break;
                 }
