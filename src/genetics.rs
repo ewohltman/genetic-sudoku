@@ -9,7 +9,9 @@
 use super::errors::NoSolutionFound;
 use super::sudoku::{Board, Row};
 use arrayvec::ArrayVec;
-use rand::{distributions::Uniform, thread_rng, Rng};
+use rand::rngs::OsRng;
+use rand::{distributions::Uniform, Rng, SeedableRng};
+use rand_pcg::Pcg64Mcg;
 use rayon::iter::Zip;
 use rayon::prelude::*;
 use rayon::vec::IntoIter;
@@ -82,8 +84,8 @@ pub fn generate_initial_population<const N: usize, const M: usize>(
 ) -> ArrayVec<Board<N>, M> {
     let max_digit = u8::try_from(N).expect("digit size exceeds 255");
     let range = Uniform::from(1..=max_digit);
-    let mut rng = thread_rng();
     let mut boards: ArrayVec<Board<N>, M> = ArrayVec::new_const();
+    let mut rng = Pcg64Mcg::from_rng(OsRng).unwrap();
 
     for _ in 0..params.population {
         let mut board: ArrayVec<Row<N>, N> = ArrayVec::new_const();
@@ -218,8 +220,8 @@ fn make_children<const N: usize, const M: usize>(
     let max_digit = u8::try_from(N).expect("digit size exceeds 255");
     let inherits_from_range: Uniform<u8> = Uniform::from(0..=1);
     let mutation_values_range: Uniform<u8> = Uniform::from(1..=max_digit);
-    let mut rng = thread_rng();
     let mut children: ArrayVec<Board<N>, M> = ArrayVec::new_const();
+    let mut rng = Pcg64Mcg::from_rng(OsRng).unwrap();
 
     for _ in 0..params.num_children_per_parent_pairs {
         let mut child: ArrayVec<Row<N>, N> = ArrayVec::new_const();
