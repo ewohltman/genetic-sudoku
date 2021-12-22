@@ -42,7 +42,7 @@ impl GAParams {
     #[must_use]
     pub fn new(
         population: usize,
-        frac_reduction: f32,
+        selection_rate: f32,
         mutation_rate: f32,
         restart: Option<u64>,
     ) -> Self {
@@ -52,7 +52,7 @@ impl GAParams {
             clippy::cast_possible_truncation,
             clippy::cast_precision_loss
         )]
-        let num_survivors = (population as f32 * frac_reduction).floor() as usize;
+        let num_survivors = (population as f32 * selection_rate).floor() as usize;
         let num_parent_pairs = num_survivors / 2;
         let num_children_per_parent_pairs = population / num_parent_pairs;
         Self {
@@ -166,8 +166,7 @@ fn next_generation<const N: usize, const M: usize>(
 
     ArrayVec::from_iter(
         make_parents(natural_selection(params, population_scores))
-            .into_par_iter()
-            .flat_map(|pop| make_children::<N, M>(params, pop))
+            .flat_map(|parents| make_children::<N, M>(params, parents))
             .collect::<Vec<Board<N>>>(),
     )
 }
@@ -204,10 +203,21 @@ fn make_parents<const N: usize, const M: usize>(
         .collect();
     drop(survivors);
 
-    let parents_x: Vec<Board<N>> = parents.0.into_iter().flatten().collect();
-    let parents_y: Vec<Board<N>> = parents.1.into_iter().flatten().collect();
+    let parents_x = parents
+        .0
+        .into_iter()
+        .flatten()
+        .collect::<Vec<Board<N>>>()
+        .into_par_iter();
 
-    parents_x.into_par_iter().zip(parents_y.into_par_iter())
+    let parents_y = parents
+        .1
+        .into_iter()
+        .flatten()
+        .collect::<Vec<Board<N>>>()
+        .into_par_iter();
+
+    parents_x.zip(parents_y)
 }
 
 fn make_children<const N: usize, const M: usize>(
@@ -218,10 +228,10 @@ fn make_children<const N: usize, const M: usize>(
     let Board(parent_y) = parents.1;
 
     let max_digit = u8::try_from(N).expect("digit size exceeds 255");
-    let inherits_from_range: Uniform<u8> = Uniform::from(0..=1);
     let mutation_values_range: Uniform<u8> = Uniform::from(1..=max_digit);
-    let mut children: ArrayVec<Board<N>, M> = ArrayVec::new_const();
+    let mutation_rate = f64::from(params.mutation_rate);
     let mut rng = Pcg64Mcg::from_rng(OsRng).unwrap();
+    let mut children: Vec<Board<N>> = Vec::with_capacity(M);
 
     for _ in 0..params.num_children_per_parent_pairs {
         let mut child: ArrayVec<Row<N>, N> = ArrayVec::new_const();
@@ -232,16 +242,15 @@ fn make_children<const N: usize, const M: usize>(
             let mut child_values: ArrayVec<u8, N> = ArrayVec::new_const();
 
             for j in 0..N {
-                let mutation_chance: f32 = rng.gen();
-
-                if mutation_chance < params.mutation_rate {
+                if rng.gen_bool(mutation_rate) {
                     child_values.push(rng.sample(mutation_values_range));
+                    continue;
+                }
+
+                if rng.gen_bool(0.5) {
+                    child_values.push(x_values[j]);
                 } else {
-                    match rng.sample(inherits_from_range) {
-                        0 => child_values.push(x_values[j]),
-                        1 => child_values.push(y_values[j]),
-                        _ => (),
-                    }
+                    child_values.push(y_values[j]);
                 }
             }
 
@@ -251,5 +260,5 @@ fn make_children<const N: usize, const M: usize>(
         children.push(Board(child.into_inner().unwrap()));
     }
 
-    children.to_vec()
+    children
 }
