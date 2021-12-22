@@ -42,7 +42,7 @@ fn bench_thread_rng(c: &mut Criterion) {
 fn bench_pcg64mcg(c: &mut Criterion) {
     let mut rng = Pcg64Mcg::from_rng(OsRng).unwrap();
 
-    c.bench_function("thread_rng", |b| {
+    c.bench_function("Pcg64Mcg", |b| {
         b.iter(|| black_box(rng.gen::<f32>()));
     });
 }
