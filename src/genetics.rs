@@ -221,35 +221,35 @@ fn make_children<const N: usize, const M: usize>(
     let max_digit = u8::try_from(N).expect("digit size exceeds 255");
     let values_range: Uniform<u8> = Uniform::from(1..=max_digit);
     let mutation_rate = f64::from(params.mutation_rate);
-    let mut rng = Pcg64Mcg::from_rng(OsRng).unwrap();
-    let mut children: Vec<Board<N>> = Vec::with_capacity(M);
 
-    for _ in 0..params.num_children_per_parent_pairs {
-        let mut child: ArrayVec<Row<N>, N> = ArrayVec::new_const();
+    (0..params.num_children_per_parent_pairs)
+        .into_par_iter()
+        .map(|_| {
+            let mut rng = Pcg64Mcg::from_rng(OsRng).unwrap();
+            let mut child: ArrayVec<Row<N>, N> = ArrayVec::new_const();
 
-        for i in 0..N {
-            let Row(x_values) = parent_x[i];
-            let Row(y_values) = parent_y[i];
-            let mut child_values: ArrayVec<u8, N> = ArrayVec::new_const();
+            for i in 0..N {
+                let Row(x_values) = parent_x[i];
+                let Row(y_values) = parent_y[i];
+                let mut child_values: ArrayVec<u8, N> = ArrayVec::new_const();
 
-            for j in 0..N {
-                if rng.gen_bool(mutation_rate) {
-                    child_values.push(rng.sample(values_range));
-                    continue;
+                for j in 0..N {
+                    if rng.gen_bool(mutation_rate) {
+                        child_values.push(rng.sample(values_range));
+                        continue;
+                    }
+
+                    if rng.gen_bool(0.5) {
+                        child_values.push(x_values[j]);
+                    } else {
+                        child_values.push(y_values[j]);
+                    }
                 }
 
-                if rng.gen_bool(0.5) {
-                    child_values.push(x_values[j]);
-                } else {
-                    child_values.push(y_values[j]);
-                }
+                child.push(Row(child_values.into_inner().unwrap()));
             }
 
-            child.push(Row(child_values.into_inner().unwrap()));
-        }
-
-        children.push(Board(child.into_inner().unwrap()));
-    }
-
-    children
+            Board(child.into_inner().unwrap())
+        })
+        .collect()
 }
