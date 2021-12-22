@@ -16,6 +16,7 @@ pub struct NoSolutionFound<const N: usize> {
 }
 
 impl<const N: usize> Display for NoSolutionFound<N> {
+    #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Debug::fmt(self, f)
     }
