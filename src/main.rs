@@ -62,14 +62,14 @@ fn parse_args() -> Result<(PathBuf, GAParams, bool), Box<dyn std::error::Error>>
 
     let path = Path::new(matches.value_of("BOARD").unwrap()).to_owned();
     let population = matches.value_of("population").unwrap_or("100").parse()?;
-    let selection = matches.value_of("selection").unwrap_or("0.5").parse()?;
-    let mutation = matches.value_of("mutation").unwrap_or("0.05").parse()?;
+    let selection_rate = matches.value_of("selection").unwrap_or("0.5").parse()?;
+    let mutation_rate = matches.value_of("mutation").unwrap_or("0.05").parse()?;
     let restart = match matches.value_of("restart") {
         None => None,
         Some(restart) => Some(restart.parse()?),
     };
     let benchmark = matches.is_present("bench");
-    let params = GAParams::new(population, selection, mutation, restart);
+    let params = GAParams::new(population, selection_rate, mutation_rate, restart);
 
     Ok((path, params, benchmark))
 }
