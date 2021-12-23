@@ -90,7 +90,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut population = generate_initial_population::<BOARD_SIZE, MAX_POPULATION>(&params);
 
         loop {
-            population = match run_simulation(&params, generation, &board, population) {
+            population = match run_simulation::<BOARD_SIZE, MAX_POPULATION>(
+                &params, generation, &board, population,
+            ) {
                 Ok(solution) => {
                     total_generations += generation;
 

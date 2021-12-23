@@ -203,6 +203,7 @@ impl<const N: usize> Board<N> {
     /// # Errors
     ///
     /// Fails if file is nonexistent, unreadable, or of the wrong size.
+    #[inline]
     pub fn read<P: AsRef<std::path::Path>>(path: P) -> Result<Self, std::io::Error> {
         let board = std::fs::read_to_string(path)?;
         let format_error =

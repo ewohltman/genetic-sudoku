@@ -16,7 +16,7 @@ use rayon::iter::Zip;
 use rayon::prelude::*;
 use rayon::vec::IntoIter;
 
-pub const MAX_POPULATION: usize = 1000;
+pub const MAX_POPULATION: usize = 100_000;
 
 pub struct GAParams {
     population: usize,
@@ -81,11 +81,11 @@ impl GAParams {
 #[must_use]
 pub fn generate_initial_population<const N: usize, const M: usize>(
     params: &GAParams,
-) -> ArrayVec<Board<N>, M> {
+) -> Vec<Board<N>> {
     let max_digit = u8::try_from(N).expect("digit size exceeds 255");
-    let range = Uniform::from(1..=max_digit);
-    let mut boards: ArrayVec<Board<N>, M> = ArrayVec::new_const();
+    let values_range = Uniform::from(1..=max_digit);
     let mut rng = Pcg64Mcg::from_rng(OsRng).unwrap();
+    let mut boards: Vec<Board<N>> = Vec::with_capacity(M);
 
     for _ in 0..params.population {
         let mut board: ArrayVec<Row<N>, N> = ArrayVec::new_const();
@@ -94,7 +94,7 @@ pub fn generate_initial_population<const N: usize, const M: usize>(
             let mut row: ArrayVec<u8, N> = ArrayVec::new_const();
 
             for _ in 0..N {
-                row.push(rng.sample(range));
+                row.push(rng.sample(values_range));
             }
 
             board.push(Row(row.into_inner().unwrap()));
@@ -127,12 +127,12 @@ pub fn run_simulation<const N: usize, const M: usize>(
     params: &GAParams,
     generation: u64,
     base: &Board<N>,
-    population: ArrayVec<Board<N>, M>,
-) -> Result<Board<N>, NoSolutionFound<N, M>> {
+    population: Vec<Board<N>>,
+) -> Result<Board<N>, NoSolutionFound<N>> {
     let population_scores: Result<Vec<(Board<N>, u8)>, Board<N>> = population
         .into_par_iter()
         .map(|candidate| -> Result<(Board<N>, u8), Board<N>> {
-            let solution = base.overlay(candidate);
+            let solution = base.overlay(&candidate);
             let score = solution.fitness();
             if score == 0 {
                 Err(solution)
@@ -141,13 +141,11 @@ pub fn run_simulation<const N: usize, const M: usize>(
             }
         })
         .collect();
-    drop(population);
 
     match population_scores {
         Err(valid_solution) => Ok(valid_solution),
-        Ok(population) => {
-            let candidates: ArrayVec<(Board<N>, u8), M> = population.into_iter().collect();
-            let next_generation = next_generation(params, generation, candidates);
+        Ok(population_scores) => {
+            let next_generation = next_generation::<N, M>(params, generation, population_scores);
             Err(NoSolutionFound { next_generation })
         }
     }
@@ -156,52 +154,45 @@ pub fn run_simulation<const N: usize, const M: usize>(
 fn next_generation<const N: usize, const M: usize>(
     params: &GAParams,
     generation: u64,
-    population_scores: ArrayVec<(Board<N>, u8), M>,
-) -> ArrayVec<Board<N>, M> {
+    population_scores: Vec<(Board<N>, u8)>,
+) -> Vec<Board<N>> {
     if let Some(restart) = params.restart {
         if (generation % restart == 0) && (generation != 0) {
-            return generate_initial_population(params);
+            return generate_initial_population::<N, M>(params);
         }
     }
 
-    ArrayVec::from_iter(
-        make_parents(natural_selection(params, population_scores))
-            .flat_map(|parents| make_children::<N, M>(params, parents))
-            .collect::<Vec<Board<N>>>(),
-    )
+    make_parents(natural_selection(params, population_scores))
+        .flat_map(|parents| make_children::<N, M>(params, parents))
+        .collect()
 }
 
-fn natural_selection<const N: usize, const M: usize>(
+fn natural_selection<const N: usize>(
     params: &GAParams,
-    mut population_scores: ArrayVec<(Board<N>, u8), M>,
-) -> ArrayVec<Board<N>, M> {
+    mut population_scores: Vec<(Board<N>, u8)>,
+) -> Vec<Board<N>> {
     population_scores.par_sort_unstable_by_key(|(_, score)| *score);
 
-    ArrayVec::from_iter(
-        population_scores
-            .drain(..params.num_survivors)
-            .collect::<Vec<(Board<N>, u8)>>()
-            .into_par_iter()
-            .map(|(survivor, _)| survivor)
-            .collect::<Vec<Board<N>>>(),
-    )
+    population_scores
+        .drain(..params.num_survivors)
+        .map(|(survivor, _)| survivor)
+        .collect()
 }
 
-fn make_parents<const N: usize, const M: usize>(
-    survivors: ArrayVec<Board<N>, M>,
+fn make_parents<const N: usize>(
+    survivors: Vec<Board<N>>,
 ) -> Zip<IntoIter<Board<N>>, IntoIter<Board<N>>> {
     let parents: (Vec<Option<Board<N>>>, Vec<Option<Board<N>>>) = survivors
         .into_par_iter()
         .enumerate()
         .map(|(i, survivor)| -> (Option<Board<N>>, Option<Board<N>>) {
             match i % 2 {
-                0 => (Some(*survivor), None),
-                1 => (None, Some(*survivor)),
+                0 => (Some(survivor), None),
+                1 => (None, Some(survivor)),
                 _ => (None, None),
             }
         })
         .collect();
-    drop(survivors);
 
     let parents_x = parents
         .0
@@ -228,37 +219,37 @@ fn make_children<const N: usize, const M: usize>(
     let Board(parent_y) = parents.1;
 
     let max_digit = u8::try_from(N).expect("digit size exceeds 255");
-    let mutation_values_range: Uniform<u8> = Uniform::from(1..=max_digit);
+    let values_range: Uniform<u8> = Uniform::from(1..=max_digit);
     let mutation_rate = f64::from(params.mutation_rate);
-    let mut rng = Pcg64Mcg::from_rng(OsRng).unwrap();
-    let mut children: Vec<Board<N>> = Vec::with_capacity(M);
 
-    for _ in 0..params.num_children_per_parent_pairs {
-        let mut child: ArrayVec<Row<N>, N> = ArrayVec::new_const();
+    (0..params.num_children_per_parent_pairs)
+        .into_par_iter()
+        .map(|_| {
+            let mut rng = Pcg64Mcg::from_rng(OsRng).unwrap();
+            let mut child: ArrayVec<Row<N>, N> = ArrayVec::new_const();
 
-        for i in 0..N {
-            let Row(x_values) = parent_x[i];
-            let Row(y_values) = parent_y[i];
-            let mut child_values: ArrayVec<u8, N> = ArrayVec::new_const();
+            for i in 0..N {
+                let Row(x_values) = parent_x[i];
+                let Row(y_values) = parent_y[i];
+                let mut child_values: ArrayVec<u8, N> = ArrayVec::new_const();
 
-            for j in 0..N {
-                if rng.gen_bool(mutation_rate) {
-                    child_values.push(rng.sample(mutation_values_range));
-                    continue;
+                for j in 0..N {
+                    if rng.gen_bool(mutation_rate) {
+                        child_values.push(rng.sample(values_range));
+                        continue;
+                    }
+
+                    if rng.gen_bool(0.5) {
+                        child_values.push(x_values[j]);
+                    } else {
+                        child_values.push(y_values[j]);
+                    }
                 }
 
-                if rng.gen_bool(0.5) {
-                    child_values.push(x_values[j]);
-                } else {
-                    child_values.push(y_values[j]);
-                }
+                child.push(Row(child_values.into_inner().unwrap()));
             }
 
-            child.push(Row(child_values.into_inner().unwrap()));
-        }
-
-        children.push(Board(child.into_inner().unwrap()));
-    }
-
-    children
+            Board(child.into_inner().unwrap())
+        })
+        .collect()
 }
