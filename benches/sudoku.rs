@@ -6,10 +6,9 @@
     clippy::cargo
 )]
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use genetic_sudoku::sudoku::{Board, Row};
-use rand::rngs::OsRng;
-use rand::{thread_rng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, rng};
 use rand_pcg::Pcg64Mcg;
 
 const BAD_BOARD: Board<4> = Board([
@@ -31,19 +30,20 @@ fn bench_count_box_duplicates(c: &mut Criterion) {
     });
 }
 
-fn bench_thread_rng(c: &mut Criterion) {
-    let mut rng = thread_rng();
+fn bench_rng(c: &mut Criterion) {
+    let mut rng = rng();
 
-    c.bench_function("thread_rng", |b| {
-        b.iter(|| black_box(&mut rng).gen::<f32>());
+    c.bench_function("rng", |b| {
+        b.iter(|| black_box(&mut rng).random::<f32>());
     });
 }
 
 fn bench_pcg64mcg(c: &mut Criterion) {
-    let mut rng = Pcg64Mcg::from_rng(OsRng).unwrap();
+    let mut os_rng = rand::prelude::StdRng::from_os_rng();
+    let mut rng = Pcg64Mcg::from_rng(&mut os_rng);
 
     c.bench_function("Pcg64Mcg", |b| {
-        b.iter(|| black_box(&mut rng).gen::<f32>());
+        b.iter(|| black_box(&mut rng).random::<f32>());
     });
 }
 
@@ -51,7 +51,7 @@ criterion_group!(
     benches,
     bench_count_row_duplicates,
     bench_count_box_duplicates,
-    bench_thread_rng,
+    bench_rng,
     bench_pcg64mcg,
 );
 criterion_main!(benches);

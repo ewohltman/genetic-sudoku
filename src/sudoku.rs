@@ -1,10 +1,4 @@
-#![warn(
-    clippy::all,
-    // clippy::restriction,
-    clippy::pedantic,
-    clippy::nursery,
-    clippy::cargo
-)]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use arrayvec::ArrayVec;
 use std::fmt;
@@ -47,8 +41,8 @@ impl<const N: usize> Display for Row<N> {
 
         for (i, value) in values.iter().enumerate() {
             match values.len() - i {
-                1 => write!(f, "{}", value)?,
-                _ => write!(f, "{} ", value)?,
+                1 => write!(f, "{value}")?,
+                _ => write!(f, "{value} ")?,
             }
         }
 
@@ -158,7 +152,7 @@ impl<const N: usize> Board<N> {
 
         // XXX This could be a proper integer square root.
         // Realistically these are the only sizes that
-        // matter anyhow, and theres no built-in integer
+        // matter anyhow, and there is no built-in integer
         // sqrt() in Rust.
         let box_size = match N {
             4 => 2,
@@ -238,11 +232,11 @@ impl<const N: usize> Board<N> {
 impl<const N: usize> Display for Board<N> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        for (i, row) in (&self.0).iter().enumerate() {
-            if i < (&self.0).len() - 1 {
-                writeln!(f, "{}", row)?;
+        for (i, row) in self.0.iter().enumerate() {
+            if i < self.0.len() - 1 {
+                writeln!(f, "{row}")?;
             } else {
-                write!(f, "{}", row)?;
+                write!(f, "{row}")?;
             }
         }
 
