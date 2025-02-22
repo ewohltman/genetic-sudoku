@@ -3,6 +3,7 @@
 use super::errors::NoSolutionFound;
 use super::sudoku::{Board, Row};
 use arrayvec::ArrayVec;
+use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng, distr::Uniform};
 use rand_pcg::Pcg64Mcg;
 use rayon::iter::Zip;
@@ -77,8 +78,7 @@ pub fn generate_initial_population<const N: usize, const M: usize>(
 ) -> Vec<Board<N>> {
     let max_digit = u8::try_from(N).expect("digit size exceeds 255");
     let values_range = Uniform::new_inclusive(1, max_digit).expect("invalid value range");
-    let mut os_rng = rand::prelude::StdRng::from_os_rng();
-    let mut rng = Pcg64Mcg::from_rng(&mut os_rng);
+    let mut rng = Pcg64Mcg::from_rng(&mut StdRng::from_os_rng());
     let mut boards: Vec<Board<N>> = Vec::with_capacity(M);
 
     for _ in 0..params.population {
@@ -220,8 +220,7 @@ fn make_children<const N: usize, const M: usize>(
     (0..params.num_children_per_parent_pairs)
         .into_par_iter()
         .map(|_| {
-            let mut x = rand::prelude::StdRng::from_os_rng();
-            let mut rng = Pcg64Mcg::from_rng(&mut x);
+            let mut rng = Pcg64Mcg::from_rng(&mut StdRng::from_os_rng());
             let mut child: ArrayVec<Row<N>, N> = ArrayVec::new_const();
 
             for i in 0..N {

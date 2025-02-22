@@ -3,6 +3,9 @@
 use arrayvec::ArrayVec;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
+use std::fs;
+use std::io::{Error, ErrorKind};
+use std::path::Path;
 
 #[derive(Debug, Default)]
 struct Scorer {
@@ -198,16 +201,12 @@ impl<const N: usize> Board<N> {
     ///
     /// Fails if file is nonexistent, unreadable, or of the wrong size.
     #[inline]
-    pub fn read<P: AsRef<std::path::Path>>(path: P) -> Result<Self, std::io::Error> {
-        let board = std::fs::read_to_string(path)?;
-        let format_error =
-            || std::io::Error::new(std::io::ErrorKind::InvalidData, "malformed sudoku board");
+    pub fn read<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let board = fs::read_to_string(path)?;
+        let format_error = || Error::new(ErrorKind::InvalidData, "malformed sudoku board");
         let dim = board.lines().next().ok_or_else(format_error)?.len();
         if dim != N {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "wrong board size",
-            ));
+            return Err(Error::new(ErrorKind::InvalidData, "wrong board size"));
         }
         let mut board_array: [Row<N>; N] = [<Row<N>>::default(); N];
         let mut chars = board.chars();
