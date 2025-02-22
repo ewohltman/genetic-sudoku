@@ -1,92 +1,74 @@
-#![warn(
-    clippy::all,
-    // clippy::restriction,
-    clippy::pedantic,
-    clippy::nursery,
-    clippy::cargo
-)]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use clap::{App, Arg};
+use clap::Parser;
 use genetic_sudoku::{
-    genetics::{generate_initial_population, run_simulation, GAParams, MAX_POPULATION},
+    genetics::{GAParams, MAX_POPULATION, generate_initial_population, run_simulation},
     sudoku::Board,
 };
-use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::error::Error;
+use std::ops::Add;
+use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
 // The board size for puzzles. Change this for larger or smaller boards.
 const BOARD_SIZE: usize = 9;
 
-fn parse_args() -> Result<(PathBuf, GAParams, bool), Box<dyn std::error::Error>> {
-    let matches = App::new("genetic-sudoku")
-        .arg(
-            Arg::with_name("population")
-                .help("population per generation")
-                .long("population")
-                .takes_value(true)
-                .value_name("N"),
-        )
-        .arg(
-            Arg::with_name("selection")
-                .help("fraction of population selected")
-                .long("fraction")
-                .takes_value(true)
-                .value_name("S"),
-        )
-        .arg(
-            Arg::with_name("mutation")
-                .help("mutation rate as fraction")
-                .long("mutation")
-                .takes_value(true)
-                .value_name("F"),
-        )
-        .arg(
-            Arg::with_name("restart")
-                .help("number of generations to restart population")
-                .long("restart")
-                .takes_value(true)
-                .value_name("R"),
-        )
-        .arg(
-            Arg::with_name("bench")
-                .help("runs program in benchmark mode")
-                .long("bench")
-                .takes_value(false),
-        )
-        .arg(
-            Arg::with_name("BOARD")
-                .help("board to solve")
-                .required(true),
-        )
-        .get_matches();
+const MAX_GENERATIONS: usize = 100_000;
 
-    let path = Path::new(matches.value_of("BOARD").unwrap()).to_owned();
-    let population = matches.value_of("population").unwrap_or("100").parse()?;
-    let selection_rate = matches.value_of("selection").unwrap_or("0.5").parse()?;
-    let mutation_rate = matches.value_of("mutation").unwrap_or("0.05").parse()?;
-    let restart = match matches.value_of("restart") {
-        None => None,
-        Some(restart) => Some(restart.parse()?),
-    };
-    let benchmark = matches.is_present("bench");
-    let params = GAParams::new(population, selection_rate, mutation_rate, restart);
+const TIMEOUT: u64 = 600;
 
-    Ok((path, params, benchmark))
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[arg(short, long, default_value_t = 100, help = "Population per generation")]
+    population: usize,
+
+    #[arg(
+        short,
+        long,
+        default_value_t = 0.5,
+        help = "Fraction of population selected"
+    )]
+    selection_rate: f32,
+
+    #[arg(
+        short,
+        long,
+        default_value_t = 0.05,
+        help = "Mutation rate as fraction"
+    )]
+    mutation_rate: f32,
+
+    #[arg(short, long, help = "Number of generations to restart population")]
+    restart: Option<usize>,
+
+    #[arg(short, long, help = "Run program in benchmark mode")]
+    benchmark: bool,
+
+    #[arg(help = "Path to board file")]
+    board_path: PathBuf,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let (path, params, benchmark) = parse_args()?;
-    let board = Board::read(path)?;
+fn main() -> Result<(), Box<dyn Error>> {
+    let args = Args::parse();
+    let params = GAParams::new(
+        args.population,
+        args.selection_rate,
+        args.mutation_rate,
+        args.restart,
+    );
+    let board = Board::read(args.board_path)?;
 
     let start = Instant::now();
-    let mut runs: u32 = 0;
-    let mut total_generations: u64 = 0;
+    let timeout = start.add(Duration::new(TIMEOUT, 0));
+    let mut runs: usize = 0;
+    let mut total_generations: usize = 0;
 
     loop {
         runs += 1;
 
         let now = Instant::now();
-        let mut generation: u64 = 0;
+        let mut generation: usize = 0;
         let mut population = generate_initial_population::<BOARD_SIZE, MAX_POPULATION>(&params);
 
         loop {
@@ -96,27 +78,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(solution) => {
                     total_generations += generation;
 
-                    print!(
-                        "Solution: Generation: {} | Duration: {:?}",
-                        generation,
-                        now.elapsed(),
-                    );
+                    print!("Generation: {generation} | Duration: {:?}", now.elapsed(),);
 
-                    if !benchmark {
-                        println!("\n{}", solution);
-                        return Ok(());
+                    if args.benchmark {
+                        println!(
+                            " | Average Generation: {} | Average Duration: {:?}",
+                            total_generations / runs,
+                            start.elapsed() / u32::try_from(runs)?
+                        );
+
+                        break;
                     }
 
-                    println!(
-                        " | Average Generation: {} | Average Duration: {:?}",
-                        total_generations / u64::from(runs),
-                        start.elapsed() / runs
-                    );
+                    println!("\n{solution}");
 
-                    break;
+                    return Ok(());
                 }
                 Err(no_solution_found) => {
                     generation += 1;
+
+                    if generation >= MAX_GENERATIONS || Instant::now().ge(&timeout) {
+                        println!("Generation: {generation} | Duration: {:?}", now.elapsed());
+
+                        return Err(no_solution_found.into());
+                    }
+
                     no_solution_found.next_generation
                 }
             };

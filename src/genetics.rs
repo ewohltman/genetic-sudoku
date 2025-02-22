@@ -1,16 +1,9 @@
-#![warn(
-    clippy::all,
-    // clippy::restriction,
-    clippy::pedantic,
-    clippy::nursery,
-    clippy::cargo
-)]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use super::errors::NoSolutionFound;
 use super::sudoku::{Board, Row};
 use arrayvec::ArrayVec;
-use rand::rngs::OsRng;
-use rand::{distributions::Uniform, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, distr::Uniform};
 use rand_pcg::Pcg64Mcg;
 use rayon::iter::Zip;
 use rayon::prelude::*;
@@ -23,7 +16,7 @@ pub struct GAParams {
     num_survivors: usize,
     num_children_per_parent_pairs: usize,
     mutation_rate: f32,
-    restart: Option<u64>,
+    restart: Option<usize>,
 }
 
 impl GAParams {
@@ -44,7 +37,7 @@ impl GAParams {
         population: usize,
         selection_rate: f32,
         mutation_rate: f32,
-        restart: Option<u64>,
+        restart: Option<usize>,
     ) -> Self {
         assert!(population <= MAX_POPULATION);
         #[allow(
@@ -83,8 +76,9 @@ pub fn generate_initial_population<const N: usize, const M: usize>(
     params: &GAParams,
 ) -> Vec<Board<N>> {
     let max_digit = u8::try_from(N).expect("digit size exceeds 255");
-    let values_range = Uniform::from(1..=max_digit);
-    let mut rng = Pcg64Mcg::from_rng(OsRng).unwrap();
+    let values_range = Uniform::new_inclusive(1, max_digit).expect("invalid value range");
+    let mut os_rng = rand::prelude::StdRng::from_os_rng();
+    let mut rng = Pcg64Mcg::from_rng(&mut os_rng);
     let mut boards: Vec<Board<N>> = Vec::with_capacity(M);
 
     for _ in 0..params.population {
@@ -125,7 +119,7 @@ pub fn generate_initial_population<const N: usize, const M: usize>(
 #[inline]
 pub fn run_simulation<const N: usize, const M: usize>(
     params: &GAParams,
-    generation: u64,
+    generation: usize,
     base: &Board<N>,
     population: Vec<Board<N>>,
 ) -> Result<Board<N>, NoSolutionFound<N>> {
@@ -153,7 +147,7 @@ pub fn run_simulation<const N: usize, const M: usize>(
 
 fn next_generation<const N: usize, const M: usize>(
     params: &GAParams,
-    generation: u64,
+    generation: usize,
     population_scores: Vec<(Board<N>, u8)>,
 ) -> Vec<Board<N>> {
     if let Some(restart) = params.restart {
@@ -219,13 +213,15 @@ fn make_children<const N: usize, const M: usize>(
     let Board(parent_y) = parents.1;
 
     let max_digit = u8::try_from(N).expect("digit size exceeds 255");
-    let values_range: Uniform<u8> = Uniform::from(1..=max_digit);
+    let values_range: Uniform<u8> =
+        Uniform::new_inclusive(1, max_digit).expect("invalid value range");
     let mutation_rate = f64::from(params.mutation_rate);
 
     (0..params.num_children_per_parent_pairs)
         .into_par_iter()
         .map(|_| {
-            let mut rng = Pcg64Mcg::from_rng(OsRng).unwrap();
+            let mut x = rand::prelude::StdRng::from_os_rng();
+            let mut rng = Pcg64Mcg::from_rng(&mut x);
             let mut child: ArrayVec<Row<N>, N> = ArrayVec::new_const();
 
             for i in 0..N {
@@ -234,12 +230,12 @@ fn make_children<const N: usize, const M: usize>(
                 let mut child_values: ArrayVec<u8, N> = ArrayVec::new_const();
 
                 for j in 0..N {
-                    if rng.gen_bool(mutation_rate) {
+                    if rng.random_bool(mutation_rate) {
                         child_values.push(rng.sample(values_range));
                         continue;
                     }
 
-                    if rng.gen_bool(0.5) {
+                    if rng.random_bool(0.5) {
                         child_values.push(x_values[j]);
                     } else {
                         child_values.push(y_values[j]);
