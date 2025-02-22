@@ -13,8 +13,6 @@ use std::time::{Duration, Instant};
 // The board size for puzzles. Change this for larger or smaller boards.
 const BOARD_SIZE: usize = 9;
 
-const MAX_GENERATIONS: usize = 100_000;
-
 const TIMEOUT: u64 = 600;
 
 #[derive(Parser, Debug)]
@@ -97,7 +95,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 Err(no_solution_found) => {
                     generation += 1;
 
-                    if generation >= MAX_GENERATIONS || Instant::now().ge(&timeout) {
+                    if Instant::now().ge(&timeout) {
                         println!("Generation: {generation} | Duration: {:?}", now.elapsed());
 
                         return Err(no_solution_found.into());

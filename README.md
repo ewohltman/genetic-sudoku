@@ -79,7 +79,7 @@ The Sudoku boards in `boards/mantere-koljonen` are from:
 > Computational Intelligence (WCCI 2008), 1-6 June, Hong Kong, China, pages
 > 4054-4061.
 
-as made available [here](http://lipas.uwasa.fi/~timan/sudoku/).
+Made available [here](http://lipas.uwasa.fi/~timan/sudoku/).
 
 Thanks much to the authors for collecting these.
 
