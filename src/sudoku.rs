@@ -1,57 +1,10 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use arrayvec::ArrayVec;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs;
 use std::io::{Error, ErrorKind};
 use std::path::Path;
-
-#[derive(Debug, Default)]
-struct Scorer {
-    seen: u64,
-    score: u8,
-}
-
-impl Scorer {
-    fn check(&mut self, digit: u8) {
-        let bit = 1 << digit;
-        if self.seen & bit != 0 {
-            self.score += 1;
-        }
-        self.seen |= bit;
-    }
-
-    const fn score(self) -> u8 {
-        self.score
-    }
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct Row<const N: usize>(pub [u8; N]);
-
-impl<const N: usize> Default for Row<N> {
-    #[inline]
-    fn default() -> Self {
-        Self([0; N])
-    }
-}
-
-impl<const N: usize> Display for Row<N> {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let values = &self.0;
-
-        for (i, value) in values.iter().enumerate() {
-            match values.len() - i {
-                1 => write!(f, "{value}")?,
-                _ => write!(f, "{value} ")?,
-            }
-        }
-
-        Ok(())
-    }
-}
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Board<const N: usize>(pub [Row<N>; N]);
@@ -92,24 +45,16 @@ impl<const N: usize> Board<N> {
     #[inline]
     #[must_use]
     pub fn overlay(&self, overlay: &Self) -> Self {
-        let base_board: &[Row<N>; N] = &self.0;
-        let overlay_board: &[Row<N>; N] = &overlay.0;
+        let mut board: [Row<N>; N] = [Row::default(); N];
 
-        let board: [Row<N>; N] =
-            apply_overlay(base_board, overlay_board, |(base_row, overlay_row)| {
-                let base_row: &[u8; N] = &base_row.0;
-                let overlay_row: &[u8; N] = &overlay_row.0;
-
-                let row: [u8; N] =
-                    apply_overlay(base_row, overlay_row, |(base_value, overlay_value)| {
-                        match *base_value {
-                            0 => *overlay_value,
-                            _ => *base_value,
-                        }
-                    });
-
-                Row(row)
-            });
+        for (i, row) in self.0.iter().enumerate().take(N) {
+            for (j, digit) in row.0.iter().enumerate().take(N) {
+                board[i].0[j] = match *digit {
+                    0 => overlay.0[i].0[j],
+                    _ => self.0[i].0[j],
+                };
+            }
+        }
 
         Self(board)
     }
@@ -127,7 +72,7 @@ impl<const N: usize> Board<N> {
     pub fn count_row_duplicates(&self) -> u8 {
         let mut total_duplicates: u8 = 0;
 
-        for row in self.0 {
+        for row in &self.0 {
             let mut scorer = Scorer::default();
 
             for value in &row.0 {
@@ -151,9 +96,7 @@ impl<const N: usize> Board<N> {
     #[inline]
     #[must_use]
     pub fn count_box_duplicates(&self) -> u8 {
-        let mut total_duplicates: u8 = 0;
-
-        // XXX This could be a proper integer square root.
+        // This could be a proper integer square root.
         // Realistically these are the only sizes that
         // matter anyhow, and there is no built-in integer
         // sqrt() in Rust.
@@ -165,12 +108,14 @@ impl<const N: usize> Board<N> {
             _ => panic!("puzzle size N must be one of (2..5)^2"),
         };
 
+        let mut total_duplicates: u8 = 0;
+
         for row in (0..N).step_by(box_size) {
             for col in (0..N).step_by(box_size) {
                 let mut scorer = Scorer::default();
 
                 for r in &self.0[row..row + box_size] {
-                    for value in &r.0[col..col + box_size] {
+                    for value in r.0.iter().skip(col).take(box_size) {
                         scorer.check(*value);
                     }
                 }
@@ -183,12 +128,11 @@ impl<const N: usize> Board<N> {
     }
 
     fn transpose(&self) -> Self {
-        let rows = &self.0;
         let mut transposed: [Row<N>; N] = [Row::default(); N];
 
-        for (i, row) in rows.iter().enumerate() {
-            for (j, value) in row.0.iter().enumerate() {
-                transposed[j].0[i] = *value;
+        for i in 0..N {
+            for (j, row) in transposed.iter_mut().enumerate().take(N) {
+                row.0[i] = self.0[i].0[j];
             }
         }
 
@@ -203,27 +147,29 @@ impl<const N: usize> Board<N> {
     #[inline]
     pub fn read<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let board = fs::read_to_string(path)?;
+        let mut lines = board.lines();
+        let mut board_array: [Row<N>; N] = [Row::default(); N];
         let format_error = || Error::new(ErrorKind::InvalidData, "malformed sudoku board");
-        let dim = board.lines().next().ok_or_else(format_error)?.len();
-        if dim != N {
-            return Err(Error::new(ErrorKind::InvalidData, "wrong board size"));
-        }
-        let mut board_array: [Row<N>; N] = [<Row<N>>::default(); N];
-        let mut chars = board.chars();
+
         for r in &mut board_array {
+            let line = lines.next().ok_or_else(format_error)?;
             let mut row = Row::default();
-            for c in &mut row.0 {
-                let ch = chars.next().ok_or_else(format_error)?;
+
+            for (i, ch) in line.chars().enumerate() {
                 #[allow(clippy::cast_possible_truncation)]
-                let d = ch.to_digit(N as u32 + 1).ok_or_else(format_error)? as u8;
-                *c = d;
+                {
+                    let digit = ch.to_digit(N as u32 + 1).ok_or_else(format_error)?;
+                    row.0[i] = digit as u8;
+                }
             }
+
             *r = row;
-            let ch = chars.next().ok_or_else(format_error)?;
-            if ch != '\n' {
-                return Err(format_error());
-            }
         }
+
+        if lines.next().is_some() {
+            return Err(format_error());
+        }
+
         Ok(Self(board_array))
     }
 }
@@ -232,10 +178,14 @@ impl<const N: usize> Display for Board<N> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         for (i, row) in self.0.iter().enumerate() {
+            writeln!(f, "{row}")?;
+
             if i < self.0.len() - 1 {
-                writeln!(f, "{row}")?;
+                if i != 0 && (i + 1) % 3 == 0 {
+                    writeln!(f, "{}", "--".repeat(N + 2))?;
+                }
             } else {
-                write!(f, "{row}")?;
+                writeln!(f, "{row}")?;
             }
         }
 
@@ -243,17 +193,57 @@ impl<const N: usize> Display for Board<N> {
     }
 }
 
-fn apply_overlay<T, F, const N: usize>(base: &[T; N], overlay: &[T; N], f: F) -> [T; N]
-where
-    T: Debug,
-    F: Fn((&T, &T)) -> T,
-{
-    base.iter()
-        .zip(overlay.iter())
-        .map(f)
-        .collect::<ArrayVec<T, N>>()
-        .into_inner()
-        .unwrap()
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct Row<const N: usize>(pub [u8; N]);
+
+impl<const N: usize> Default for Row<N> {
+    #[inline]
+    fn default() -> Self {
+        Self([0; N])
+    }
+}
+
+impl<const N: usize> Display for Row<N> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        for (i, value) in self.0.iter().enumerate() {
+            write!(f, "{value}")?;
+
+            if i < self.0.len() - 1 {
+                write!(f, " ")?;
+
+                if i != 0 && (i + 1) % 3 == 0 {
+                    write!(f, "| ")?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Default)]
+struct Scorer {
+    seen: u64,
+    score: u8,
+}
+
+impl Scorer {
+    #[inline]
+    fn check(&mut self, digit: u8) {
+        let bit = 1 << digit;
+
+        if self.seen & bit != 0 {
+            self.score += 1;
+        } else {
+            self.seen |= bit;
+        }
+    }
+
+    #[inline]
+    const fn score(self) -> u8 {
+        self.score
+    }
 }
 
 #[cfg(test)]
@@ -301,7 +291,7 @@ mod tests {
     fn test_scorer_no_duplicates() {
         let mut scorer = Scorer::default();
 
-        // Since Scorer.seen is u64, it supports up to 49 before overflowing
+        // Since Scorer.seen is u64, it supports up to 49 before overflowing.
         for i in 1..=49 {
             scorer.check(i);
         }

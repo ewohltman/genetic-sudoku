@@ -1,6 +1,6 @@
 [package]
 name = "genetic-sudoku"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2024"
 authors = ["Eric Wohltman <eric.wohltman@gmail.com>", "Bart Massey <bart@cs.pdx.edu>"]
 repository = "https://github.com/ewohltman/genetic-sudoku"

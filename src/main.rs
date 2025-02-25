@@ -1,19 +1,13 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use clap::Parser;
-use genetic_sudoku::{
-    genetics::{GAParams, MAX_POPULATION, generate_initial_population, run_simulation},
-    sudoku::Board,
-};
+use genetic_sudoku::{genetics, sudoku};
 use std::error::Error;
-use std::ops::Add;
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 // The board size for puzzles. Change this for larger or smaller boards.
 const BOARD_SIZE: usize = 9;
-
-const TIMEOUT: u64 = 600;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -32,7 +26,7 @@ struct Args {
     #[arg(
         short,
         long,
-        default_value_t = 0.05,
+        default_value_t = 0.06,
         help = "Mutation rate as fraction"
     )]
     mutation_rate: f32,
@@ -49,16 +43,15 @@ struct Args {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
-    let params = GAParams::new(
+    let params = genetics::GAParams::new(
         args.population,
         args.selection_rate,
         args.mutation_rate,
         args.restart,
     );
-    let board = Board::read(args.board_path)?;
+    let board = sudoku::Board::read(args.board_path)?;
 
     let start = Instant::now();
-    let timeout = start.add(Duration::new(TIMEOUT, 0));
     let mut runs: usize = 0;
     let mut total_generations: usize = 0;
 
@@ -67,16 +60,19 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let now = Instant::now();
         let mut generation: usize = 0;
-        let mut population = generate_initial_population::<BOARD_SIZE, MAX_POPULATION>(&params);
+        let mut population = genetics::generate_initial_population::<
+            BOARD_SIZE,
+            { genetics::MAX_POPULATION },
+        >(&params);
 
         loop {
-            population = match run_simulation::<BOARD_SIZE, MAX_POPULATION>(
+            population = match genetics::run_simulation::<BOARD_SIZE, { genetics::MAX_POPULATION }>(
                 &params, generation, &board, population,
             ) {
                 Ok(solution) => {
                     total_generations += generation;
 
-                    print!("Generation: {generation} | Duration: {:?}", now.elapsed(),);
+                    print!("Generation: {generation} | Duration: {:?}", now.elapsed());
 
                     if args.benchmark {
                         println!(
@@ -88,18 +84,22 @@ fn main() -> Result<(), Box<dyn Error>> {
                         break;
                     }
 
-                    println!("\n{solution}");
+                    println!("\n{solution}\nSolution found");
 
                     return Ok(());
                 }
                 Err(no_solution_found) => {
-                    generation += 1;
+                    if generation % 1000 == 0 {
+                        let best_board = no_solution_found.next_generation[0];
 
-                    if Instant::now().ge(&timeout) {
-                        println!("Generation: {generation} | Duration: {:?}", now.elapsed());
-
-                        return Err(no_solution_found.into());
+                        println!(
+                            "Generation: {generation} | Duration: {:?} | Score: {}\n{best_board}",
+                            now.elapsed(),
+                            best_board.fitness(),
+                        );
                     }
+
+                    generation += 1;
 
                     no_solution_found.next_generation
                 }

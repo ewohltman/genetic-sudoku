@@ -13,6 +13,7 @@ use genetic_sudoku::sudoku::{Board, Row};
 use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng, rng};
 use rand_pcg::Pcg64Mcg;
+use std::time::Duration;
 
 const BOARD_SIZE_4: usize = 4;
 
@@ -72,7 +73,7 @@ fn bench_run_simulation(c: &mut Criterion) {
                 &EASY_4,
                 population.clone(),
             )
-        });
+        })
     });
 }
 
@@ -93,12 +94,17 @@ fn bench_pcg64mcg(c: &mut Criterion) {
 }
 
 criterion_group!(
-    benches,
-    bench_count_row_duplicates,
+    name = benches;
+    config = Criterion::default();
+    targets = bench_count_row_duplicates,
     bench_count_box_duplicates,
     bench_generate_initial_population,
-    bench_run_simulation,
     bench_rng,
-    bench_pcg64mcg,
+    bench_pcg64mcg
 );
-criterion_main!(benches);
+criterion_group!(
+    name = benches_long;
+    config = Criterion::default().measurement_time(Duration::from_secs(10));
+    targets = bench_run_simulation
+);
+criterion_main!(benches, benches_long);

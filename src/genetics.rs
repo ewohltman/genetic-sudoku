@@ -41,6 +41,7 @@ impl GAParams {
         restart: Option<usize>,
     ) -> Self {
         assert!(population <= MAX_POPULATION);
+
         #[allow(
             clippy::cast_sign_loss,
             clippy::cast_possible_truncation,
@@ -49,6 +50,7 @@ impl GAParams {
         let num_survivors = (population as f32 * selection_rate).floor() as usize;
         let num_parent_pairs = num_survivors / 2;
         let num_children_per_parent_pairs = population / num_parent_pairs;
+
         Self {
             population,
             num_survivors,
@@ -78,7 +80,6 @@ pub fn generate_initial_population<const N: usize, const M: usize>(
 ) -> Vec<Board<N>> {
     let max_digit = u8::try_from(N).expect("digit size exceeds 255");
     let values_range = Uniform::new_inclusive(1, max_digit).expect("invalid value range");
-    let mut rng = Pcg64Mcg::from_rng(&mut StdRng::from_os_rng());
     let mut boards: Vec<Board<N>> = Vec::with_capacity(M);
 
     for _ in 0..params.population {
@@ -86,9 +87,11 @@ pub fn generate_initial_population<const N: usize, const M: usize>(
 
         for _ in 0..N {
             let mut row: ArrayVec<u8, N> = ArrayVec::new_const();
+            let rng = Pcg64Mcg::from_rng(&mut StdRng::from_os_rng());
+            let values: Vec<u8> = rng.sample_iter(values_range).take(N).collect();
 
-            for _ in 0..N {
-                row.push(rng.sample(values_range));
+            for item in &values {
+                row.push(*item);
             }
 
             board.push(Row(row.into_inner().unwrap()));
@@ -123,25 +126,25 @@ pub fn run_simulation<const N: usize, const M: usize>(
     base: &Board<N>,
     population: Vec<Board<N>>,
 ) -> Result<Board<N>, NoSolutionFound<N>> {
-    let population_scores: Result<Vec<(Board<N>, u8)>, Board<N>> = population
+    let population_scores: Vec<(Board<N>, u8)> = population
         .into_par_iter()
-        .map(|candidate| -> Result<(Board<N>, u8), Board<N>> {
+        .map(|candidate| -> (Board<N>, u8) {
             let solution = base.overlay(&candidate);
             let score = solution.fitness();
-            if score == 0 {
-                Err(solution)
-            } else {
-                Ok((solution, score))
-            }
+
+            (solution, score)
         })
         .collect();
 
-    match population_scores {
-        Err(valid_solution) => Ok(valid_solution),
-        Ok(population_scores) => {
-            let next_generation = next_generation::<N, M>(params, generation, population_scores);
-            Err(NoSolutionFound { next_generation })
-        }
+    #[allow(clippy::option_if_let_else)] // Prevent cloning population_scores.
+    match population_scores
+        .iter()
+        .find(|board_score| board_score.1 == 0)
+    {
+        Some(solution) => Ok(solution.0),
+        None => Err(NoSolutionFound {
+            next_generation: next_generation::<N, M>(params, generation, population_scores),
+        }),
     }
 }
 
@@ -165,7 +168,7 @@ fn natural_selection<const N: usize>(
     params: &GAParams,
     mut population_scores: Vec<(Board<N>, u8)>,
 ) -> Vec<Board<N>> {
-    population_scores.par_sort_unstable_by_key(|(_, score)| *score);
+    population_scores.par_sort_by_key(|(_, score)| *score);
 
     population_scores
         .drain(..params.num_survivors)
@@ -173,36 +176,28 @@ fn natural_selection<const N: usize>(
         .collect()
 }
 
+type ScoreBoard<const N: usize> = Vec<(usize, Board<N>)>;
+
 fn make_parents<const N: usize>(
     survivors: Vec<Board<N>>,
 ) -> Zip<IntoIter<Board<N>>, IntoIter<Board<N>>> {
-    let parents: (Vec<Option<Board<N>>>, Vec<Option<Board<N>>>) = survivors
-        .into_par_iter()
+    let (parent_x, parent_y): (ScoreBoard<N>, ScoreBoard<N>) = survivors
+        .into_iter()
         .enumerate()
-        .map(|(i, survivor)| -> (Option<Board<N>>, Option<Board<N>>) {
-            match i % 2 {
-                0 => (Some(survivor), None),
-                1 => (None, Some(survivor)),
-                _ => (None, None),
-            }
-        })
-        .collect();
+        .partition(|(i, _)| i % 2 == 0);
 
-    let parents_x = parents
-        .0
+    parent_x
         .into_iter()
-        .flatten()
+        .map(|(_, board)| board)
         .collect::<Vec<Board<N>>>()
-        .into_par_iter();
-
-    let parents_y = parents
-        .1
-        .into_iter()
-        .flatten()
-        .collect::<Vec<Board<N>>>()
-        .into_par_iter();
-
-    parents_x.zip(parents_y)
+        .into_par_iter()
+        .zip(
+            parent_y
+                .into_iter()
+                .map(|(_, board)| board)
+                .collect::<Vec<Board<N>>>()
+                .into_par_iter(),
+        )
 }
 
 fn make_children<const N: usize, const M: usize>(
@@ -211,10 +206,8 @@ fn make_children<const N: usize, const M: usize>(
 ) -> Vec<Board<N>> {
     let Board(parent_x) = parents.0;
     let Board(parent_y) = parents.1;
-
     let max_digit = u8::try_from(N).expect("digit size exceeds 255");
-    let values_range: Uniform<u8> =
-        Uniform::new_inclusive(1, max_digit).expect("invalid value range");
+    let values_range = Uniform::new_inclusive(1, max_digit).expect("invalid value range");
     let mutation_rate = f64::from(params.mutation_rate);
 
     (0..params.num_children_per_parent_pairs)
