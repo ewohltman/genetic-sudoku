@@ -1,5 +1,10 @@
+# IDE metadata
 /.idea
+
+# Build artifacts
 /target
+
+# Performance testing data
 perf.data
 perf.data.old
 flamegraph.svg
