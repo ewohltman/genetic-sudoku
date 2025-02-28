@@ -180,12 +180,8 @@ impl<const N: usize> Display for Board<N> {
         for (i, row) in self.0.iter().enumerate() {
             writeln!(f, "{row}")?;
 
-            if i < self.0.len() - 1 {
-                if i != 0 && (i + 1) % 3 == 0 {
-                    writeln!(f, "{}", "--".repeat(N + 2))?;
-                }
-            } else {
-                writeln!(f, "{row}")?;
+            if i != 0 && (i + 1) % 3 == 0 && i < self.0.len() - 1 {
+                writeln!(f, "{}", "--".repeat(N + 2))?;
             }
         }
 
