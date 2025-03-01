@@ -174,6 +174,10 @@ impl<const N: usize> Board<N> {
             let mut parsed: usize = 0;
 
             for (i, ch) in line.chars().enumerate() {
+                if i >= N {
+                    return Err(format_error_columns());
+                }
+
                 #[allow(clippy::cast_possible_truncation)]
                 {
                     let digit = ch.to_digit(10).ok_or_else(format_error_char)?;
@@ -272,6 +276,7 @@ mod tests {
     use std::env;
     use std::io::Write;
     use std::path::PathBuf;
+    use std::vec::Vec;
 
     const GOOD_BOARD: Board<4> = Board([
         Row([1, 2, 3, 4]),
@@ -294,6 +299,99 @@ mod tests {
         Row([1, 2, 3, 4]),
     ]);
 
+    struct TempFile {
+        file: fs::File,
+        path: PathBuf,
+    }
+
+    impl TempFile {
+        fn new(file_name: &str) -> Self {
+            let dir = env::temp_dir();
+            let path = dir.as_path().join(file_name);
+
+            TempFile {
+                file: fs::File::create(&path).unwrap(),
+                path,
+            }
+        }
+
+        fn write_fmt(&mut self, fmt: fmt::Arguments<'_>) -> Result<(), Error> {
+            self.file.write_fmt(fmt)
+        }
+    }
+
+    impl Drop for TempFile {
+        fn drop(&mut self) {
+            fs::remove_file(&self.path).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_board_new() {
+        const N: usize = 4;
+
+        let mut expected_rows: Vec<Row<N>> = Vec::with_capacity(N);
+
+        for _ in 0..N {
+            expected_rows.push(Row([0; N]));
+        }
+
+        let expected = Board::<N>::new(expected_rows.try_into().unwrap());
+        let actual = Board::<N>::new([
+            Row::<N>::default(),
+            Row::<N>::default(),
+            Row::<N>::default(),
+            Row::<N>::default(),
+        ]);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_board_size() {
+        const N: usize = 4;
+
+        let mut rows: Vec<Row<N>> = Vec::with_capacity(N);
+
+        for _ in 0..N {
+            rows.push(Row([0; N]));
+        }
+
+        let board = Board::<N>::new(rows.try_into().unwrap());
+
+        assert_eq!(board.size(), N);
+    }
+
+    #[test]
+    fn test_board_overlay() {
+        const N: usize = 4;
+
+        let mut overlay_rows: Vec<Row<N>> = Vec::with_capacity(N);
+        let mut board_rows: Vec<Row<N>> = Vec::with_capacity(N);
+
+        for _ in 0..N - 1 {
+            board_rows.push(Row([0; N]));
+            overlay_rows.push(Row([1; N]));
+        }
+
+        board_rows.push(Row([9; N])); // Row of numbers to not be replaced.
+        overlay_rows.push(Row([1; N]));
+
+        let board = Board::<N>::new(board_rows.try_into().unwrap());
+        let overlay = Board::<N>::new(overlay_rows.try_into().unwrap());
+
+        // expected:
+        // 1111
+        // 1111
+        // 1111
+        // 9999
+
+        let expected = Board::<N>::new([Row([1; N]), Row([1; N]), Row([1; N]), Row([9; N])]);
+        let actual = board.overlay(&overlay);
+
+        assert_eq!(actual, expected);
+    }
+
     #[test]
     fn test_board_fitness() {
         assert_eq!(0, GOOD_BOARD.fitness());
@@ -305,163 +403,181 @@ mod tests {
         assert_eq!(GOOD_BOARD_TRANSPOSED, GOOD_BOARD.transpose());
     }
 
-    struct TempFile<'a> {
-        file_path: &'a PathBuf,
-        file: fs::File,
-    }
+    #[test]
+    fn test_board_read_valid() {
+        const N: usize = 4;
 
-    impl TempFile<'_> {
-        fn write_fmt(&mut self, fmt: fmt::Arguments<'_>) -> Result<(), Error> {
-            self.file.write_fmt(fmt)
-        }
-    }
+        let mut file = TempFile::new("valid_board.txt");
+        let mut expected_rows: Vec<Row<N>> = Vec::with_capacity(N);
 
-    impl Drop for TempFile<'_> {
-        fn drop(&mut self) {
-            fs::remove_file(self.file_path).unwrap();
+        for _ in 0..N {
+            writeln!(file, "{}", "0".repeat(N)).unwrap();
+            expected_rows.push(Row([0; N]));
         }
+
+        let actual = Board::<N>::read(&file.path).unwrap();
+        let expected = Board::new(expected_rows.try_into().unwrap());
+
+        assert_eq!(actual, expected);
     }
 
     #[test]
-    fn test_read_valid_board() {
-        let dir = env::temp_dir();
-        let file_path = dir.as_path().join("valid_board.txt");
-        let mut file = TempFile {
-            file: fs::File::create(&file_path).unwrap(),
-            file_path: &file_path,
-        };
+    fn test_board_read_valid_larger_size() {
+        const N: usize = 9;
 
-        writeln!(file, "123").unwrap();
-        writeln!(file, "456").unwrap();
-        writeln!(file, "789").unwrap();
+        let mut file = TempFile::new("larger_board.txt");
+        let mut expected_rows: Vec<Row<N>> = Vec::with_capacity(N);
 
-        let board = Board::<3>::read(&file_path).unwrap();
+        for _ in 0..N {
+            writeln!(file, "{}", "0".repeat(N)).unwrap();
+            expected_rows.push(Row([0; N]));
+        }
 
-        assert_eq!(
-            board,
-            Board([Row([1, 2, 3]), Row([4, 5, 6]), Row([7, 8, 9]),])
-        );
+        let actual = Board::<N>::read(&file.path).unwrap();
+        let expected = Board(expected_rows.try_into().unwrap());
+
+        assert_eq!(actual, expected);
     }
 
     #[test]
-    fn test_read_nonexistent_file() {
+    fn test_board_read_nonexistent_file() {
+        const N: usize = 4;
+
         let dir = env::temp_dir();
         let file_path = dir.as_path().join("nonexistent.txt");
 
-        let result = Board::<3>::read(&file_path);
+        let actual = Board::<N>::read(&file_path);
 
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err().kind(), ErrorKind::NotFound);
+        assert!(actual.is_err());
+        assert_eq!(actual.unwrap_err().kind(), ErrorKind::NotFound);
     }
 
     #[test]
-    fn test_read_malformed_board_too_few_rows() {
-        let dir = env::temp_dir();
-        let file_path = dir.as_path().join("too_few_board.txt");
-        let mut file = TempFile {
-            file: fs::File::create(&file_path).unwrap(),
-            file_path: &file_path,
-        };
+    fn test_board_read_malformed_too_few_rows() {
+        const N: usize = 4;
 
-        writeln!(file, "123").unwrap();
-        writeln!(file, "456").unwrap();
+        let mut file = TempFile::new("too_few_rows_board.txt");
 
-        let result = Board::<3>::read(&file_path);
-
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err().kind(), ErrorKind::InvalidData);
-    }
-
-    #[test]
-    fn test_read_malformed_board_too_many_rows() {
-        let dir = env::temp_dir();
-        let file_path = dir.as_path().join("too_many_board.txt");
-        let mut file = TempFile {
-            file: fs::File::create(&file_path).unwrap(),
-            file_path: &file_path,
-        };
-
-        writeln!(file, "123").unwrap();
-        writeln!(file, "456").unwrap();
-        writeln!(file, "789").unwrap();
-        writeln!(file, "ABC").unwrap();
-
-        let result = Board::<3>::read(&file_path);
-
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err().kind(), ErrorKind::InvalidData);
-    }
-
-    #[test]
-    fn test_read_malformed_board_invalid_char() {
-        let dir = env::temp_dir();
-        let file_path = dir.as_path().join("bad_char_board.txt");
-        let mut file = TempFile {
-            file: fs::File::create(&file_path).unwrap(),
-            file_path: &file_path,
-        };
-
-        writeln!(file, "123").unwrap();
-        writeln!(file, "45A").unwrap();
-        writeln!(file, "789").unwrap();
-
-        let result = Board::<3>::read(&file_path);
-
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err().kind(), ErrorKind::InvalidData);
-    }
-
-    #[test]
-    fn test_read_malformed_board_wrong_column_length() {
-        let dir = env::temp_dir();
-        let file_path = dir.as_path().join("bad_column_board.txt");
-        let mut file = TempFile {
-            file: fs::File::create(&file_path).unwrap(),
-            file_path: &file_path,
-        };
-
-        writeln!(file, "12").unwrap();
-        writeln!(file, "456").unwrap();
-        writeln!(file, "789").unwrap();
-
-        let result = Board::<3>::read(&file_path);
-
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err().kind(), ErrorKind::InvalidData);
-    }
-
-    #[test]
-    fn test_read_valid_board_larger_size() {
-        let dir = env::temp_dir();
-        let file_path = dir.as_path().join("larger_board.txt");
-        let mut file = TempFile {
-            file: fs::File::create(&file_path).unwrap(),
-            file_path: &file_path,
-        };
-
-        for _ in 0..4 {
-            writeln!(file, "{}", "0".repeat(4)).unwrap();
+        for _ in 0..(N - 1) {
+            writeln!(file, "{}", "0".repeat(N)).unwrap();
         }
 
-        let board = Board::<4>::read(&file_path).unwrap();
-        let expected_board = [[0_u8; 4]; 4];
+        let actual = Board::<N>::read(&file.path);
 
-        let expected = Board([
-            Row(expected_board[0]),
-            Row(expected_board[1]),
-            Row(expected_board[2]),
-            Row(expected_board[3]),
-        ]);
-
-        assert_eq!(board, expected);
+        assert!(actual.is_err());
+        assert_eq!(actual.unwrap_err().kind(), ErrorKind::InvalidData);
     }
 
     #[test]
-    fn test_scorer() {
-        test_scorer_no_duplicates();
-        test_scorer_with_duplicates();
+    fn test_board_read_malformed_too_many_rows() {
+        const N: usize = 4;
+
+        let mut file = TempFile::new("too_many_rows_board.txt");
+
+        for _ in 0..(N + 1) {
+            writeln!(file, "{}", "0".repeat(N)).unwrap();
+        }
+
+        let actual = Board::<N>::read(&file.path);
+
+        assert!(actual.is_err());
+        assert_eq!(actual.unwrap_err().kind(), ErrorKind::InvalidData);
     }
 
+    #[test]
+    fn test_board_read_malformed_too_few_columns() {
+        const N: usize = 4;
+
+        let mut file = TempFile::new("too_few_columns_board.txt");
+
+        for _ in 0..N {
+            writeln!(file, "{}", "0".repeat(N - 1)).unwrap();
+        }
+
+        let actual = Board::<N>::read(&file.path);
+
+        assert!(actual.is_err());
+        assert_eq!(actual.unwrap_err().kind(), ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn test_board_read_malformed_too_many_columns() {
+        const N: usize = 4;
+
+        let mut file = TempFile::new("too_many_columns_board.txt");
+
+        for _ in 0..N {
+            writeln!(file, "{}", "0".repeat(N + 1)).unwrap();
+        }
+
+        let actual = Board::<N>::read(&file.path);
+
+        assert!(actual.is_err());
+        assert_eq!(actual.unwrap_err().kind(), ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn test_board_read_malformed_invalid_char() {
+        const N: usize = 4;
+
+        let mut file = TempFile::new("bad_char_board.txt");
+
+        for _ in 0..N - 1 {
+            writeln!(file, "{}", "0".repeat(N)).unwrap();
+        }
+
+        writeln!(file, "{}", "A".repeat(N)).unwrap();
+
+        let actual = Board::<N>::read(&file.path);
+
+        assert!(actual.is_err());
+        assert_eq!(actual.unwrap_err().kind(), ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn test_board_display() {
+        const N: usize = 9;
+
+        let board = Board::<N>::new([
+            Row([0; N]),
+            Row([0; N]),
+            Row([0; N]),
+            Row([0; N]),
+            Row([0; N]),
+            Row([0; N]),
+            Row([0; N]),
+            Row([0; N]),
+            Row([0; N]),
+        ]);
+
+        let expected = "\
+        0 0 0 | 0 0 0 | 0 0 0\n\
+        0 0 0 | 0 0 0 | 0 0 0\n\
+        0 0 0 | 0 0 0 | 0 0 0\n\
+        ----------------------\n\
+        0 0 0 | 0 0 0 | 0 0 0\n\
+        0 0 0 | 0 0 0 | 0 0 0\n\
+        0 0 0 | 0 0 0 | 0 0 0\n\
+        ----------------------\n\
+        0 0 0 | 0 0 0 | 0 0 0\n\
+        0 0 0 | 0 0 0 | 0 0 0\n\
+        0 0 0 | 0 0 0 | 0 0 0\n"
+            .to_string();
+        let actual = format!("{board}");
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_row_display() {
+        let row = Row([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        let expected = "1 2 3 | 4 5 6 | 7 8 9".to_string();
+        let actual = format!("{row}");
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
     fn test_scorer_no_duplicates() {
         let mut scorer = Scorer::default();
 
@@ -473,6 +589,7 @@ mod tests {
         assert_eq!(0, scorer.score());
     }
 
+    #[test]
     fn test_scorer_with_duplicates() {
         let mut scorer = Scorer::default();
 
