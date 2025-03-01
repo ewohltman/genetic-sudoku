@@ -18,5 +18,7 @@ jobs:
         run: cargo clippy
       - name: Run tests
         run: cargo test
+      - name: Run benchmarks
+        run: cargo bench
       - name: Build binary
         run: cargo build --release

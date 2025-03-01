@@ -8,14 +8,12 @@
 
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use genetic_sudoku::genetics;
-use genetic_sudoku::genetics::{GAParams, MAX_POPULATION};
+use genetic_sudoku::genetics::GAParams;
 use genetic_sudoku::sudoku::{Board, Row};
 use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng, rng};
 use rand_pcg::Pcg64Mcg;
 use std::time::Duration;
-
-const BOARD_SIZE_4: usize = 4;
 
 const BOARD_SIZE_9: usize = 9;
 
@@ -27,29 +25,21 @@ const SELECTION_RATE: f32 = 0.5;
 
 const MUTATION_RATE: f32 = 0.05;
 
-const BAD_BOARD: Board<4> = Board([
-    Row([1, 2, 3, 4]),
-    Row([1, 2, 3, 4]),
-    Row([1, 2, 3, 4]),
-    Row([1, 2, 3, 4]),
-]);
+fn bench_board_fitness(c: &mut Criterion) {
+    const FITNESS_BOARD: Board<BOARD_SIZE_9> = Board([
+        Row([9, 9, 9, 9, 9, 9, 9, 9, 9]),
+        Row([9, 9, 9, 9, 9, 9, 9, 9, 9]),
+        Row([9, 9, 9, 9, 9, 9, 9, 9, 9]),
+        Row([9, 9, 9, 9, 9, 9, 9, 9, 9]),
+        Row([9, 9, 9, 9, 9, 9, 9, 9, 9]),
+        Row([9, 9, 9, 9, 9, 9, 9, 9, 9]),
+        Row([9, 9, 9, 9, 9, 9, 9, 9, 9]),
+        Row([9, 9, 9, 9, 9, 9, 9, 9, 9]),
+        Row([9, 9, 9, 9, 9, 9, 9, 9, 9]),
+    ]);
 
-const EASY_4: Board<4> = Board([
-    Row([1, 0, 0, 4]),
-    Row([0, 4, 1, 2]),
-    Row([2, 0, 4, 3]),
-    Row([4, 3, 0, 0]),
-]);
-
-fn bench_count_row_duplicates(c: &mut Criterion) {
-    c.bench_function("count_row_duplicates", |b| {
-        b.iter(|| black_box(BAD_BOARD).count_row_duplicates());
-    });
-}
-
-fn bench_count_box_duplicates(c: &mut Criterion) {
-    c.bench_function("count_box_duplicates", |b| {
-        b.iter(|| black_box(BAD_BOARD).count_box_duplicates());
+    c.bench_function("board_fitness", |b| {
+        b.iter(|| black_box(FITNESS_BOARD).fitness());
     });
 }
 
@@ -57,23 +47,32 @@ fn bench_generate_initial_population(c: &mut Criterion) {
     let params = GAParams::new(POPULATION, SELECTION_RATE, MUTATION_RATE, None);
 
     c.bench_function("generate_initial_population", |b| {
-        b.iter(|| genetics::generate_initial_population::<BOARD_SIZE_9, MAX_POPULATION>(&params));
+        b.iter(|| genetics::generate_initial_population::<BOARD_SIZE_9>(&params));
     });
 }
 
 fn bench_run_simulation(c: &mut Criterion) {
+    const BOARD_SIZE_4: usize = 4;
+
+    const EASY_4: Board<BOARD_SIZE_4> = Board([
+        Row([1, 0, 0, 4]),
+        Row([0, 4, 1, 2]),
+        Row([2, 0, 4, 3]),
+        Row([4, 3, 0, 0]),
+    ]);
+
     let params = GAParams::new(POPULATION, SELECTION_RATE, MUTATION_RATE, None);
-    let population = genetics::generate_initial_population::<BOARD_SIZE_4, MAX_POPULATION>(&params);
+    let population = genetics::generate_initial_population::<BOARD_SIZE_4>(&params);
 
     c.bench_function("run_simulation", |b| {
         b.iter(|| {
-            genetics::run_simulation::<BOARD_SIZE_4, MAX_POPULATION>(
+            genetics::run_simulation::<BOARD_SIZE_4>(
                 &params,
                 GENERATION,
                 &EASY_4,
                 population.clone(),
             )
-        })
+        });
     });
 }
 
@@ -96,8 +95,7 @@ fn bench_pcg64mcg(c: &mut Criterion) {
 criterion_group!(
     name = benches;
     config = Criterion::default();
-    targets = bench_count_row_duplicates,
-    bench_count_box_duplicates,
+    targets = bench_board_fitness,
     bench_generate_initial_population,
     bench_rng,
     bench_pcg64mcg
