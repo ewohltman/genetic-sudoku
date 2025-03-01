@@ -1,5 +1,6 @@
-#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+mod inner;
 
+use crate::sudoku::inner::Scorer;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs;
@@ -10,18 +11,6 @@ use std::path::Path;
 pub struct Board<const N: usize>(pub [Row<N>; N]);
 
 impl<const N: usize> Board<N> {
-    #[inline]
-    #[must_use]
-    pub const fn new(rows: [Row<N>; N]) -> Self {
-        Self(rows)
-    }
-
-    #[inline]
-    #[must_use]
-    pub const fn size(&self) -> usize {
-        self.0.len()
-    }
-
     /// Overlays the given `overlay` on top of `self`.
     ///
     /// Returns a Result containing a new Board with the provided `overlay`
@@ -30,21 +19,10 @@ impl<const N: usize> Board<N> {
     /// # Arguments
     ///
     /// * `overlay` - A Board to overlay on top of `self`
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use genetic_sudoku::sudoku::{Board, Row};
-    ///
-    /// let base = Board::new([Row([0, 1]), Row([1, 0])]);
-    /// let overlay = Board::new([Row([2, 0]), Row([0, 2])]);
-    /// let overlaid = base.overlay(&overlay);
-    ///
-    /// assert_eq!(Board::new([Row([2, 1]), Row([1, 2])]), overlaid);
     /// ```
     #[inline]
     #[must_use]
-    pub fn overlay(&self, overlay: &Self) -> Self {
+    pub(crate) fn overlay(&self, overlay: &Self) -> Self {
         let mut board: [Row<N>; N] = [Row::default(); N];
 
         for (i, row) in self.0.iter().enumerate().take(N) {
@@ -69,7 +47,7 @@ impl<const N: usize> Board<N> {
 
     #[inline]
     #[must_use]
-    pub fn count_row_duplicates(&self) -> u8 {
+    pub(crate) fn count_row_duplicates(&self) -> u8 {
         let mut total_duplicates: u8 = 0;
 
         for row in &self.0 {
@@ -95,7 +73,7 @@ impl<const N: usize> Board<N> {
     /// 25.
     #[inline]
     #[must_use]
-    pub fn count_box_duplicates(&self) -> u8 {
+    pub(crate) fn count_box_duplicates(&self) -> u8 {
         // This could be a proper integer square root.
         // Realistically these are the only sizes that
         // matter anyhow, and there is no built-in integer
@@ -246,37 +224,14 @@ impl<const N: usize> Display for Row<N> {
     }
 }
 
-#[derive(Debug, Default)]
-struct Scorer {
-    seen: u64,
-    score: u8,
-}
-
-impl Scorer {
-    #[inline]
-    fn check(&mut self, digit: u8) {
-        let bit = 1 << digit;
-
-        if self.seen & bit != 0 {
-            self.score += 1;
-        } else {
-            self.seen |= bit;
-        }
-    }
-
-    #[inline]
-    const fn score(self) -> u8 {
-        self.score
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::env;
-    use std::io::Write;
+    use super::{Board, Row};
+    use std::fmt;
+    use std::io::{Error, ErrorKind, Write};
     use std::path::PathBuf;
     use std::vec::Vec;
+    use std::{env, fs};
 
     const GOOD_BOARD: Board<4> = Board([
         Row([1, 2, 3, 4]),
@@ -336,8 +291,8 @@ mod tests {
             expected_rows.push(Row([0; N]));
         }
 
-        let expected = Board::<N>::new(expected_rows.try_into().unwrap());
-        let actual = Board::<N>::new([
+        let expected = Board::<N>(expected_rows.try_into().unwrap());
+        let actual = Board::<N>([
             Row::<N>::default(),
             Row::<N>::default(),
             Row::<N>::default(),
@@ -345,21 +300,6 @@ mod tests {
         ]);
 
         assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_board_size() {
-        const N: usize = 4;
-
-        let mut rows: Vec<Row<N>> = Vec::with_capacity(N);
-
-        for _ in 0..N {
-            rows.push(Row([0; N]));
-        }
-
-        let board = Board::<N>::new(rows.try_into().unwrap());
-
-        assert_eq!(board.size(), N);
     }
 
     #[test]
@@ -377,8 +317,8 @@ mod tests {
         board_rows.push(Row([9; N])); // Row of numbers to not be replaced.
         overlay_rows.push(Row([1; N]));
 
-        let board = Board::<N>::new(board_rows.try_into().unwrap());
-        let overlay = Board::<N>::new(overlay_rows.try_into().unwrap());
+        let board = Board::<N>(board_rows.try_into().unwrap());
+        let overlay = Board::<N>(overlay_rows.try_into().unwrap());
 
         // expected:
         // 1111
@@ -386,7 +326,7 @@ mod tests {
         // 1111
         // 9999
 
-        let expected = Board::<N>::new([Row([1; N]), Row([1; N]), Row([1; N]), Row([9; N])]);
+        let expected = Board::<N>([Row([1; N]), Row([1; N]), Row([1; N]), Row([9; N])]);
         let actual = board.overlay(&overlay);
 
         assert_eq!(actual, expected);
@@ -416,7 +356,7 @@ mod tests {
         }
 
         let actual = Board::<N>::read(&file.path).unwrap();
-        let expected = Board::new(expected_rows.try_into().unwrap());
+        let expected = Board(expected_rows.try_into().unwrap());
 
         assert_eq!(actual, expected);
     }
@@ -538,7 +478,7 @@ mod tests {
     fn test_board_display() {
         const N: usize = 9;
 
-        let board = Board::<N>::new([
+        let board = Board::<N>([
             Row([0; N]),
             Row([0; N]),
             Row([0; N]),
@@ -567,6 +507,15 @@ mod tests {
 
         assert_eq!(actual, expected);
     }
+    #[test]
+    fn test_row_default() {
+        const N: usize = 4;
+
+        let expected = Row([0, 0, 0, 0]);
+        let actual = Row::<N>::default();
+
+        assert_eq!(actual, expected);
+    }
 
     #[test]
     fn test_row_display() {
@@ -575,30 +524,5 @@ mod tests {
         let actual = format!("{row}");
 
         assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_scorer_no_duplicates() {
-        let mut scorer = Scorer::default();
-
-        // Since Scorer.seen is u64, it supports up to 49 before overflowing.
-        for i in 1..=49 {
-            scorer.check(i);
-        }
-
-        assert_eq!(0, scorer.score());
-    }
-
-    #[test]
-    fn test_scorer_with_duplicates() {
-        let mut scorer = Scorer::default();
-
-        scorer.check(1);
-        scorer.check(1); // One duplicate
-        scorer.check(2);
-        scorer.check(2); // Two duplicates
-        scorer.check(2); // Three duplicates
-
-        assert_eq!(3, scorer.score());
     }
 }

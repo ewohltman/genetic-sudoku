@@ -60,13 +60,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let now = Instant::now();
         let mut generation: usize = 0;
-        let mut population = genetics::generate_initial_population::<
-            BOARD_SIZE,
-            { genetics::MAX_POPULATION },
-        >(&params);
+        let mut population = genetics::generate_initial_population::<BOARD_SIZE>(&params);
 
         loop {
-            population = match genetics::run_simulation::<BOARD_SIZE, { genetics::MAX_POPULATION }>(
+            population = match genetics::run_simulation::<BOARD_SIZE>(
                 &params, generation, &board, population,
             ) {
                 Ok(solution) => {
