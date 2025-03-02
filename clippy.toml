@@ -1,1 +1,1 @@
-allowed-duplicate-crates = ["zerocopy", "zerocopy-derive"]
+allowed-duplicate-crates = ["unicode-width", "wasi", "windows-sys", "zerocopy", "zerocopy-derive"]

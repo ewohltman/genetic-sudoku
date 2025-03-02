@@ -11,15 +11,8 @@ use rayon::vec::IntoIter;
 
 pub fn next_generation<const N: usize>(
     params: &super::GAParams,
-    generation: usize,
     population_scores: Vec<(Board<N>, u8)>,
 ) -> Vec<Board<N>> {
-    if let Some(restart) = params.restart {
-        if (generation % restart == 0) && (generation != 0) {
-            return super::generate_initial_population::<N>(params);
-        }
-    }
-
     make_parents(natural_selection(params, population_scores))
         .flat_map(|parents| make_children::<N>(params, parents))
         .collect()

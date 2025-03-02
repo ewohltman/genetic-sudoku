@@ -11,6 +11,77 @@ use std::path::Path;
 pub struct Board<const N: usize>(pub [Row<N>; N]);
 
 impl<const N: usize> Board<N> {
+    /// Read a board from a file.
+    ///
+    /// # Errors
+    ///
+    /// Fails if file is nonexistent, unreadable, or of the wrong size.
+    #[inline]
+    pub fn read<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let board = fs::read_to_string(path)?;
+        let mut lines = board.lines();
+        let mut board_array: [Row<N>; N] = [Row::default(); N];
+        let format_error_rows = || {
+            Error::new(
+                ErrorKind::InvalidData,
+                "malformed sudoku board: invalid number of rows",
+            )
+        };
+        let format_error_columns = || {
+            Error::new(
+                ErrorKind::InvalidData,
+                "malformed sudoku board: invalid number of columns",
+            )
+        };
+        let format_error_char = || {
+            Error::new(
+                ErrorKind::InvalidData,
+                "malformed sudoku board: invalid character",
+            )
+        };
+
+        for r in &mut board_array {
+            let line = lines.next().ok_or_else(format_error_rows)?;
+            let mut row = Row::default();
+            let mut parsed: usize = 0;
+
+            for (i, ch) in line.chars().enumerate() {
+                if i >= N {
+                    return Err(format_error_columns());
+                }
+
+                #[allow(clippy::cast_possible_truncation)]
+                {
+                    let digit = ch.to_digit(10).ok_or_else(format_error_char)?;
+                    row.0[i] = digit as u8;
+                }
+
+                parsed += 1;
+            }
+
+            if parsed != N {
+                return Err(format_error_columns());
+            }
+
+            *r = row;
+        }
+
+        if lines.next().is_some() {
+            return Err(format_error_rows());
+        }
+
+        Ok(Self(board_array))
+    }
+
+    /// Calculates the fitness of the given board.
+    #[inline]
+    #[must_use]
+    pub fn fitness(&self) -> u8 {
+        self.count_row_duplicates()
+            + self.transpose().count_row_duplicates()
+            + self.count_box_duplicates()
+    }
+
     /// Overlays the given `overlay` on top of `self`.
     ///
     /// Returns a Result containing a new Board with the provided `overlay`
@@ -35,14 +106,6 @@ impl<const N: usize> Board<N> {
         }
 
         Self(board)
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn fitness(&self) -> u8 {
-        self.count_row_duplicates()
-            + self.transpose().count_row_duplicates()
-            + self.count_box_duplicates()
     }
 
     #[inline]
@@ -115,68 +178,6 @@ impl<const N: usize> Board<N> {
         }
 
         Self(transposed)
-    }
-
-    /// Read a board from a file.
-    ///
-    /// # Errors
-    ///
-    /// Fails if file is nonexistent, unreadable, or of the wrong size.
-    #[inline]
-    pub fn read<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
-        let board = fs::read_to_string(path)?;
-        let mut lines = board.lines();
-        let mut board_array: [Row<N>; N] = [Row::default(); N];
-        let format_error_rows = || {
-            Error::new(
-                ErrorKind::InvalidData,
-                "malformed sudoku board: invalid number of rows",
-            )
-        };
-        let format_error_columns = || {
-            Error::new(
-                ErrorKind::InvalidData,
-                "malformed sudoku board: invalid number of columns",
-            )
-        };
-        let format_error_char = || {
-            Error::new(
-                ErrorKind::InvalidData,
-                "malformed sudoku board: invalid character",
-            )
-        };
-
-        for r in &mut board_array {
-            let line = lines.next().ok_or_else(format_error_rows)?;
-            let mut row = Row::default();
-            let mut parsed: usize = 0;
-
-            for (i, ch) in line.chars().enumerate() {
-                if i >= N {
-                    return Err(format_error_columns());
-                }
-
-                #[allow(clippy::cast_possible_truncation)]
-                {
-                    let digit = ch.to_digit(10).ok_or_else(format_error_char)?;
-                    row.0[i] = digit as u8;
-                }
-
-                parsed += 1;
-            }
-
-            if parsed != N {
-                return Err(format_error_columns());
-            }
-
-            *r = row;
-        }
-
-        if lines.next().is_some() {
-            return Err(format_error_rows());
-        }
-
-        Ok(Self(board_array))
     }
 }
 
@@ -264,7 +265,7 @@ mod tests {
             let dir = env::temp_dir();
             let path = dir.as_path().join(file_name);
 
-            TempFile {
+            Self {
                 file: fs::File::create(&path).unwrap(),
                 path,
             }
@@ -414,7 +415,7 @@ mod tests {
 
         let mut file = TempFile::new("too_many_rows_board.txt");
 
-        for _ in 0..(N + 1) {
+        for _ in 0..=N {
             writeln!(file, "{}", "0".repeat(N)).unwrap();
         }
 
