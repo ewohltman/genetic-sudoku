@@ -17,8 +17,6 @@ use std::time::Duration;
 
 const BOARD_SIZE_9: usize = 9;
 
-const GENERATION: usize = 0;
-
 const POPULATION: usize = 100;
 
 const SELECTION_RATE: f32 = 0.5;
@@ -44,7 +42,7 @@ fn bench_board_fitness(c: &mut Criterion) {
 }
 
 fn bench_generate_initial_population(c: &mut Criterion) {
-    let params = GAParams::new(POPULATION, SELECTION_RATE, MUTATION_RATE, None);
+    let params = GAParams::new(POPULATION, SELECTION_RATE, MUTATION_RATE);
 
     c.bench_function("generate_initial_population", |b| {
         b.iter(|| genetics::generate_initial_population::<BOARD_SIZE_9>(&params));
@@ -61,18 +59,11 @@ fn bench_run_simulation(c: &mut Criterion) {
         Row([4, 3, 0, 0]),
     ]);
 
-    let params = GAParams::new(POPULATION, SELECTION_RATE, MUTATION_RATE, None);
+    let params = GAParams::new(POPULATION, SELECTION_RATE, MUTATION_RATE);
     let population = genetics::generate_initial_population::<BOARD_SIZE_4>(&params);
 
     c.bench_function("run_simulation", |b| {
-        b.iter(|| {
-            genetics::run_simulation::<BOARD_SIZE_4>(
-                &params,
-                GENERATION,
-                &EASY_4,
-                population.clone(),
-            )
-        });
+        b.iter(|| genetics::run_simulation::<BOARD_SIZE_4>(&params, &EASY_4, population.clone()));
     });
 }
 
@@ -102,7 +93,7 @@ criterion_group!(
 );
 criterion_group!(
     name = benches_long;
-    config = Criterion::default().measurement_time(Duration::from_secs(10));
+    config = Criterion::default().measurement_time(Duration::from_secs(30));
     targets = bench_run_simulation
 );
 criterion_main!(benches, benches_long);

@@ -15,7 +15,6 @@ pub struct GAParams {
     num_survivors: usize,
     num_children_per_parent_pairs: usize,
     mutation_rate: f32,
-    restart: Option<usize>,
 }
 
 impl GAParams {
@@ -32,12 +31,7 @@ impl GAParams {
     /// Panics if the given population is greater than `MAX_POPULATION`.
     #[inline]
     #[must_use]
-    pub fn new(
-        population: usize,
-        selection_rate: f32,
-        mutation_rate: f32,
-        restart: Option<usize>,
-    ) -> Self {
+    pub fn new(population: usize, selection_rate: f32, mutation_rate: f32) -> Self {
         assert!(population <= MAX_POPULATION);
 
         #[allow(
@@ -54,7 +48,6 @@ impl GAParams {
             num_survivors,
             num_children_per_parent_pairs,
             mutation_rate,
-            restart,
         }
     }
 }
@@ -118,7 +111,6 @@ pub fn generate_initial_population<const N: usize>(params: &GAParams) -> Vec<Boa
 #[inline]
 pub fn run_simulation<const N: usize>(
     params: &GAParams,
-    generation: usize,
     base: &Board<N>,
     population: Vec<Board<N>>,
 ) -> Result<Board<N>, NoSolutionFound<N>> {
@@ -139,7 +131,7 @@ pub fn run_simulation<const N: usize>(
     {
         Some(solution) => Ok(solution.0),
         None => Err(NoSolutionFound {
-            next_generation: inner::next_generation::<N>(params, generation, population_scores),
+            next_generation: inner::next_generation::<N>(params, population_scores),
         }),
     }
 }

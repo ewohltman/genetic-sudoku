@@ -1,27 +1,39 @@
 .DEFAULT_GOAL := default
 
 .PHONY: default
-default: target/release/genetic-sudoku
+default: build
 
 .PHONY: clean
 clean:
-	rm -rf target
+	cargo clean
 
 .PHONY: fmt
 fmt:
-	cargo fmt
+	cargo fmt --all --check
 
 .PHONY: clippy
-clippy: fmt
-	cargo clippy
+clippy:
+	cargo clippy --all-targets
 
 .PHONY: test
-test: fmt
+test:
 	cargo test
 
 .PHONY: bench
-bench: fmt
+bench:
 	cargo bench
 
-target/release/genetic-sudoku:
+.PHONY: build
+build:
 	cargo build --release
+
+.PHONY: install
+install:
+	cargo install --path .
+
+.PHONY: ci
+ci: clean fmt clippy test bench build
+
+.PHONY: vhs
+vhs:
+	vhs demo/demo.tape
