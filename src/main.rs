@@ -4,16 +4,16 @@ use clap::Parser;
 use crossterm::event::{self, Event};
 use genetic_sudoku::{genetics, sudoku};
 use ratatui::{DefaultTerminal, Frame, text::Text};
-use simple_eyre::{Report, Result};
+use simple_eyre::Result;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::{Receiver, Sender};
 
 // The board size for puzzles. Change this for larger or smaller boards.
 const BOARD_SIZE: usize = 9;
 
-const POLL_DURATION_RUNNING: Duration = Duration::from_nanos(1);
-
-const POLL_DURATION_DONE: Duration = Duration::from_millis(100);
+const POLL_DURATION: Duration = Duration::from_secs(1);
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -48,10 +48,17 @@ struct Args {
     board_path: PathBuf,
 }
 
-fn main() -> Result<()> {
+struct RenderUpdate {
+    start: Instant,
+    generation: usize,
+    board: sudoku::Board<BOARD_SIZE>,
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
     simple_eyre::install()?;
 
-    let result = run(Args::parse(), ratatui::init());
+    let result = run(Args::parse(), ratatui::init()).await;
 
     ratatui::restore();
 
@@ -59,52 +66,116 @@ fn main() -> Result<()> {
 }
 
 #[inline]
-fn run(args: Args, mut terminal: DefaultTerminal) -> Result<()> {
+async fn run(args: Args, terminal: DefaultTerminal) -> Result<()> {
     let start = Instant::now();
     let board = sudoku::Board::read(args.board_path)?;
     let params = genetics::GAParams::new(args.population, args.selection_rate, args.mutation_rate);
-    let render = args.render.unwrap_or(1);
+    let render_generations = args.render.unwrap_or(1);
+
     let mut generation: usize = 0;
     let mut population = genetics::generate_initial_population::<BOARD_SIZE>(&params);
 
-    loop {
-        population = match genetics::run_simulation::<BOARD_SIZE>(&params, &board, population) {
-            Ok(solution) => {
-                terminal.draw(|frame: &mut Frame| {
-                    frame.render_widget(widget(start, generation, &solution), frame.area());
-                })?;
+    let (quit_tx, mut quit_rx) = mpsc::channel::<()>(1);
+    let (render_tx, render_rx) = mpsc::channel::<RenderUpdate>(1);
 
-                loop {
-                    if should_quit(POLL_DURATION_DONE)? {
-                        return Ok(());
+    watch_quit(quit_tx.clone());
+    render(terminal, quit_tx.clone(), render_rx);
+
+    tokio::spawn(async move {
+        loop {
+            if quit_tx.is_closed() {
+                return;
+            }
+
+            population = match genetics::run_simulation::<BOARD_SIZE>(&params, &board, population) {
+                Ok(solution) => {
+                    let _ = render_tx
+                        .send(RenderUpdate {
+                            start,
+                            generation,
+                            board: solution,
+                        })
+                        .await;
+
+                    return;
+                }
+                Err(no_solution_found) => {
+                    if generation == 0 || generation % render_generations == 0 {
+                        let _ = render_tx
+                            .send(RenderUpdate {
+                                start,
+                                generation,
+                                board: no_solution_found.next_generation[0],
+                            })
+                            .await;
+                    }
+
+                    generation += 1;
+
+                    no_solution_found.next_generation
+                }
+            };
+        }
+    });
+
+    let _ = quit_rx.recv().await;
+
+    Ok(())
+}
+
+#[inline]
+fn watch_quit(quit_tx: Sender<()>) {
+    tokio::spawn(async move {
+        loop {
+            if quit_tx.is_closed() {
+                return;
+            }
+
+            match should_quit() {
+                Ok(quit) => {
+                    if quit {
+                        let _ = quit_tx.send(()).await;
                     }
                 }
-            }
-            Err(no_solution_found) => {
-                if should_quit(POLL_DURATION_RUNNING)? {
-                    return Err(Report::new(no_solution_found));
+                Err(_) => {
+                    let _ = quit_tx.send(()).await;
                 }
-
-                if generation % render == 0 {
-                    let best_board = no_solution_found.next_generation[0];
-
-                    terminal.draw(|frame: &mut Frame| {
-                        frame.render_widget(widget(start, generation, &best_board), frame.area());
-                    })?;
-                }
-
-                generation += 1;
-
-                no_solution_found.next_generation
             }
-        };
-    }
+        }
+    });
+}
+
+#[inline]
+fn render(
+    mut terminal: DefaultTerminal,
+    quit_tx: Sender<()>,
+    mut render_rx: Receiver<RenderUpdate>,
+) {
+    tokio::spawn(async move {
+        loop {
+            if quit_tx.is_closed() {
+                return;
+            }
+
+            match render_rx.recv().await {
+                Some(update) => {
+                    let _ = terminal.draw(|frame: &mut Frame| {
+                        frame.render_widget(
+                            widget(update.start, update.generation, &update.board),
+                            frame.area(),
+                        );
+                    });
+                }
+                None => return,
+            }
+        }
+    });
 }
 
 /// Returns whether we should quit because Ctrl+c, q, or escape was pressed.
 #[inline]
-fn should_quit(poll_duration: Duration) -> Result<bool> {
-    if event::poll(poll_duration)? {
+fn should_quit() -> Result<bool> {
+    if event::poll(POLL_DURATION)? {
         if let Event::Key(key) = event::read()? {
             let ctrl = key.modifiers.contains(event::KeyModifiers::CONTROL);
             let c = key.code == event::KeyCode::Char('c');
