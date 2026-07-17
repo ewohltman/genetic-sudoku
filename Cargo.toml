@@ -21,6 +21,7 @@ simple-eyre = "0.3.1"
 
 [dev-dependencies]
 criterion = "0.8"
+tempfile = "3"
 
 [[bench]]
 name = "benches"

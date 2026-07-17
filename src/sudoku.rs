@@ -7,6 +7,22 @@ use std::fs;
 use std::io::{Error, ErrorKind};
 use std::path::Path;
 
+/// Returns the sub-box size for a board of size `n`.
+///
+/// # Panics
+///
+/// Panics if `n` is not a perfect square.
+const fn box_size(n: usize) -> usize {
+    let box_size = n.isqrt();
+
+    assert!(
+        box_size * box_size == n,
+        "board size must be a perfect square"
+    );
+
+    box_size
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Board<const N: usize>(pub [Row<N>; N]);
 
@@ -39,6 +55,12 @@ impl<const N: usize> Board<N> {
                 "malformed sudoku board: invalid character",
             )
         };
+        let format_error_digit = || {
+            Error::new(
+                ErrorKind::InvalidData,
+                "malformed sudoku board: digit exceeds board size",
+            )
+        };
 
         for r in &mut board_array {
             let line = lines.next().ok_or_else(format_error_rows)?;
@@ -53,6 +75,11 @@ impl<const N: usize> Board<N> {
                 #[allow(clippy::cast_possible_truncation)]
                 {
                     let digit = ch.to_digit(10).ok_or_else(format_error_char)?;
+
+                    if digit as usize > N {
+                        return Err(format_error_digit());
+                    }
+
                     row.0[i] = digit as u8;
                 }
 
@@ -76,7 +103,7 @@ impl<const N: usize> Board<N> {
     /// Calculates the fitness of the given board.
     #[inline]
     #[must_use]
-    pub fn fitness(&self) -> u8 {
+    pub fn fitness(&self) -> u16 {
         self.count_row_duplicates()
             + self.transpose().count_row_duplicates()
             + self.count_box_duplicates()
@@ -110,8 +137,8 @@ impl<const N: usize> Board<N> {
 
     #[inline]
     #[must_use]
-    pub(crate) fn count_row_duplicates(&self) -> u8 {
-        let mut total_duplicates: u8 = 0;
+    pub(crate) fn count_row_duplicates(&self) -> u16 {
+        let mut total_duplicates: u16 = 0;
 
         for row in &self.0 {
             let mut scorer = Scorer::default();
@@ -120,7 +147,7 @@ impl<const N: usize> Board<N> {
                 scorer.check(*value);
             }
 
-            total_duplicates += scorer.score();
+            total_duplicates += u16::from(scorer.score());
         }
 
         total_duplicates
@@ -132,24 +159,13 @@ impl<const N: usize> Board<N> {
     ///
     /// # Panics
     ///
-    /// Panics if the size of the Board, N, is not a perfect square >= 4 or <=
-    /// 25.
+    /// Panics if the size of the Board, N, is not a perfect square.
     #[inline]
     #[must_use]
-    pub(crate) fn count_box_duplicates(&self) -> u8 {
-        // This could be a proper integer square root.
-        // Realistically these are the only sizes that
-        // matter anyhow, and there is no built-in integer
-        // sqrt() in Rust.
-        let box_size = match N {
-            4 => 2,
-            9 => 3,
-            16 => 4,
-            25 => 5,
-            _ => panic!("puzzle size N must be one of (2..5)^2"),
-        };
+    pub(crate) fn count_box_duplicates(&self) -> u16 {
+        let box_size = box_size(N);
 
-        let mut total_duplicates: u8 = 0;
+        let mut total_duplicates: u16 = 0;
 
         for row in (0..N).step_by(box_size) {
             for col in (0..N).step_by(box_size) {
@@ -161,7 +177,7 @@ impl<const N: usize> Board<N> {
                     }
                 }
 
-                total_duplicates += scorer.score();
+                total_duplicates += u16::from(scorer.score());
             }
         }
 
@@ -184,10 +200,12 @@ impl<const N: usize> Board<N> {
 impl<const N: usize> Display for Board<N> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let box_size = box_size(N);
+
         for (i, row) in self.0.iter().enumerate() {
             writeln!(f, "{row}")?;
 
-            if i != 0 && (i + 1) % 3 == 0 && i < self.0.len() - 1 {
+            if i != 0 && (i + 1) % box_size == 0 && i < self.0.len() - 1 {
                 writeln!(f, "{}", "--".repeat(N + 2))?;
             }
         }
@@ -209,13 +227,15 @@ impl<const N: usize> Default for Row<N> {
 impl<const N: usize> Display for Row<N> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let box_size = box_size(N);
+
         for (i, value) in self.0.iter().enumerate() {
             write!(f, "{value}")?;
 
             if i < self.0.len() - 1 {
                 write!(f, " ")?;
 
-                if i != 0 && (i + 1) % 3 == 0 {
+                if i != 0 && (i + 1) % box_size == 0 {
                     write!(f, "| ")?;
                 }
             }
@@ -228,11 +248,10 @@ impl<const N: usize> Display for Row<N> {
 #[cfg(test)]
 mod tests {
     use super::{Board, Row};
-    use std::fmt;
-    use std::io::{Error, ErrorKind, Write};
-    use std::path::PathBuf;
+    use std::env;
+    use std::io::{ErrorKind, Write};
     use std::vec::Vec;
-    use std::{env, fs};
+    use tempfile::NamedTempFile;
 
     const GOOD_BOARD: Board<4> = Board([
         Row([1, 2, 3, 4]),
@@ -254,33 +273,6 @@ mod tests {
         Row([1, 2, 3, 4]),
         Row([1, 2, 3, 4]),
     ]);
-
-    struct TempFile {
-        file: fs::File,
-        path: PathBuf,
-    }
-
-    impl TempFile {
-        fn new(file_name: &str) -> Self {
-            let dir = env::temp_dir();
-            let path = dir.as_path().join(file_name);
-
-            Self {
-                file: fs::File::create(&path).unwrap(),
-                path,
-            }
-        }
-
-        fn write_fmt(&mut self, fmt: fmt::Arguments<'_>) -> Result<(), Error> {
-            self.file.write_fmt(fmt)
-        }
-    }
-
-    impl Drop for TempFile {
-        fn drop(&mut self) {
-            fs::remove_file(&self.path).unwrap();
-        }
-    }
 
     #[test]
     fn test_board_new() {
@@ -348,7 +340,7 @@ mod tests {
     fn test_board_read_valid() {
         const N: usize = 4;
 
-        let mut file = TempFile::new("valid_board.txt");
+        let mut file = NamedTempFile::new().unwrap();
         let mut expected_rows: Vec<Row<N>> = Vec::with_capacity(N);
 
         for _ in 0..N {
@@ -356,7 +348,7 @@ mod tests {
             expected_rows.push(Row([0; N]));
         }
 
-        let actual = Board::<N>::read(&file.path).unwrap();
+        let actual = Board::<N>::read(file.path()).unwrap();
         let expected = Board(expected_rows.try_into().unwrap());
 
         assert_eq!(actual, expected);
@@ -366,7 +358,7 @@ mod tests {
     fn test_board_read_valid_larger_size() {
         const N: usize = 9;
 
-        let mut file = TempFile::new("larger_board.txt");
+        let mut file = NamedTempFile::new().unwrap();
         let mut expected_rows: Vec<Row<N>> = Vec::with_capacity(N);
 
         for _ in 0..N {
@@ -374,7 +366,7 @@ mod tests {
             expected_rows.push(Row([0; N]));
         }
 
-        let actual = Board::<N>::read(&file.path).unwrap();
+        let actual = Board::<N>::read(file.path()).unwrap();
         let expected = Board(expected_rows.try_into().unwrap());
 
         assert_eq!(actual, expected);
@@ -397,13 +389,13 @@ mod tests {
     fn test_board_read_malformed_too_few_rows() {
         const N: usize = 4;
 
-        let mut file = TempFile::new("too_few_rows_board.txt");
+        let mut file = NamedTempFile::new().unwrap();
 
         for _ in 0..(N - 1) {
             writeln!(file, "{}", "0".repeat(N)).unwrap();
         }
 
-        let actual = Board::<N>::read(&file.path);
+        let actual = Board::<N>::read(file.path());
 
         assert!(actual.is_err());
         assert_eq!(actual.unwrap_err().kind(), ErrorKind::InvalidData);
@@ -413,13 +405,13 @@ mod tests {
     fn test_board_read_malformed_too_many_rows() {
         const N: usize = 4;
 
-        let mut file = TempFile::new("too_many_rows_board.txt");
+        let mut file = NamedTempFile::new().unwrap();
 
         for _ in 0..=N {
             writeln!(file, "{}", "0".repeat(N)).unwrap();
         }
 
-        let actual = Board::<N>::read(&file.path);
+        let actual = Board::<N>::read(file.path());
 
         assert!(actual.is_err());
         assert_eq!(actual.unwrap_err().kind(), ErrorKind::InvalidData);
@@ -429,13 +421,13 @@ mod tests {
     fn test_board_read_malformed_too_few_columns() {
         const N: usize = 4;
 
-        let mut file = TempFile::new("too_few_columns_board.txt");
+        let mut file = NamedTempFile::new().unwrap();
 
         for _ in 0..N {
             writeln!(file, "{}", "0".repeat(N - 1)).unwrap();
         }
 
-        let actual = Board::<N>::read(&file.path);
+        let actual = Board::<N>::read(file.path());
 
         assert!(actual.is_err());
         assert_eq!(actual.unwrap_err().kind(), ErrorKind::InvalidData);
@@ -445,13 +437,13 @@ mod tests {
     fn test_board_read_malformed_too_many_columns() {
         const N: usize = 4;
 
-        let mut file = TempFile::new("too_many_columns_board.txt");
+        let mut file = NamedTempFile::new().unwrap();
 
         for _ in 0..N {
             writeln!(file, "{}", "0".repeat(N + 1)).unwrap();
         }
 
-        let actual = Board::<N>::read(&file.path);
+        let actual = Board::<N>::read(file.path());
 
         assert!(actual.is_err());
         assert_eq!(actual.unwrap_err().kind(), ErrorKind::InvalidData);
@@ -461,7 +453,7 @@ mod tests {
     fn test_board_read_malformed_invalid_char() {
         const N: usize = 4;
 
-        let mut file = TempFile::new("bad_char_board.txt");
+        let mut file = NamedTempFile::new().unwrap();
 
         for _ in 0..N - 1 {
             writeln!(file, "{}", "0".repeat(N)).unwrap();
@@ -469,7 +461,7 @@ mod tests {
 
         writeln!(file, "{}", "A".repeat(N)).unwrap();
 
-        let actual = Board::<N>::read(&file.path);
+        let actual = Board::<N>::read(file.path());
 
         assert!(actual.is_err());
         assert_eq!(actual.unwrap_err().kind(), ErrorKind::InvalidData);
@@ -508,6 +500,38 @@ mod tests {
 
         assert_eq!(actual, expected);
     }
+    #[test]
+    fn test_board_display_4x4() {
+        let expected = "\
+        1 2 | 3 4\n\
+        3 4 | 1 2\n\
+        ------------\n\
+        4 3 | 2 1\n\
+        2 1 | 4 3\n"
+            .to_string();
+        let actual = format!("{GOOD_BOARD}");
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_board_read_malformed_digit_exceeds_size() {
+        const N: usize = 4;
+
+        let mut file = NamedTempFile::new().unwrap();
+
+        for _ in 0..N - 1 {
+            writeln!(file, "{}", "0".repeat(N)).unwrap();
+        }
+
+        writeln!(file, "{}", "9".repeat(N)).unwrap();
+
+        let actual = Board::<N>::read(file.path());
+
+        assert!(actual.is_err());
+        assert_eq!(actual.unwrap_err().kind(), ErrorKind::InvalidData);
+    }
+
     #[test]
     fn test_row_default() {
         const N: usize = 4;

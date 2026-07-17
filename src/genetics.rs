@@ -22,16 +22,30 @@ impl GAParams {
     /// # Arguments
     ///
     /// * `population` - the size of the population to use
-    /// * `frac_reduction` - the fractional value of survivors per generation
+    /// * `selection_rate` - the fraction of survivors per generation
     /// * `mutation_rate` - the rate at which values should mutate
-    /// * `restart` - the number of generations before a population restart
     ///
     /// # Panics
-    /// Panics if the given population is greater than `MAX_POPULATION`.
+    ///
+    /// Panics if the given population is greater than `MAX_POPULATION`, if
+    /// `selection_rate` is not in `(0.0, 1.0]`, if `mutation_rate` is not in
+    /// `[0.0, 1.0]`, or if `population * selection_rate` yields fewer than
+    /// two survivors.
     #[inline]
     #[must_use]
     pub fn new(population: usize, selection_rate: f32, mutation_rate: f32) -> Self {
-        assert!(population <= MAX_POPULATION);
+        assert!(
+            population <= MAX_POPULATION,
+            "population must not exceed {MAX_POPULATION}"
+        );
+        assert!(
+            selection_rate > 0.0 && selection_rate <= 1.0,
+            "selection_rate must be in (0.0, 1.0]"
+        );
+        assert!(
+            (0.0..=1.0).contains(&mutation_rate),
+            "mutation_rate must be in [0.0, 1.0]"
+        );
 
         #[allow(
             clippy::cast_sign_loss,
@@ -39,6 +53,12 @@ impl GAParams {
             clippy::cast_precision_loss
         )]
         let num_survivors = (population as f32 * selection_rate).floor() as usize;
+
+        assert!(
+            num_survivors >= 2,
+            "population * selection_rate must yield at least two survivors"
+        );
+
         let num_parent_pairs = num_survivors / 2;
         let num_children_per_parent_pairs = population / num_parent_pairs;
 
@@ -113,9 +133,9 @@ pub fn run_simulation<const N: usize>(
     base: &Board<N>,
     population: Vec<Board<N>>,
 ) -> Result<Board<N>, NoSolutionFound<N>> {
-    let population_scores: Vec<(Board<N>, u8)> = population
+    let population_scores: Vec<(Board<N>, u16)> = population
         .into_par_iter()
-        .map(|candidate| -> (Board<N>, u8) {
+        .map(|candidate| -> (Board<N>, u16) {
             let solution = base.overlay(&candidate);
             let score = solution.fitness();
 

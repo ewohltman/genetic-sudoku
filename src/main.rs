@@ -16,13 +16,20 @@ const POLL_DURATION_DONE: Duration = Duration::from_millis(100);
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, default_value_t = 100, help = "Population per generation")]
+    #[arg(
+        short,
+        long,
+        default_value_t = 100,
+        value_parser = parse_population,
+        help = "Population per generation"
+    )]
     population: usize,
 
     #[arg(
         short,
         long,
         default_value_t = 0.5,
+        value_parser = parse_selection_rate,
         help = "Fraction of population selected"
     )]
     selection_rate: f32,
@@ -31,6 +38,7 @@ struct Args {
         short,
         long,
         default_value_t = 0.06,
+        value_parser = parse_mutation_rate,
         help = "Mutation rate as fraction"
     )]
     mutation_rate: f32,
@@ -46,10 +54,45 @@ struct Args {
     board_path: PathBuf,
 }
 
+/// Parses a population argument, requiring `2..=MAX_POPULATION`.
+fn parse_population(s: &str) -> Result<usize, String> {
+    let population: usize = s.parse().map_err(|err| format!("{err}"))?;
+
+    if (2..=genetics::MAX_POPULATION).contains(&population) {
+        Ok(population)
+    } else {
+        Err(format!("must be in 2..={}", genetics::MAX_POPULATION))
+    }
+}
+
+/// Parses a selection rate argument, requiring `(0.0, 1.0]`.
+fn parse_selection_rate(s: &str) -> Result<f32, String> {
+    let rate: f32 = s.parse().map_err(|err| format!("{err}"))?;
+
+    if rate > 0.0 && rate <= 1.0 {
+        Ok(rate)
+    } else {
+        Err(String::from("must be in (0.0, 1.0]"))
+    }
+}
+
+/// Parses a mutation rate argument, requiring `[0.0, 1.0]`.
+fn parse_mutation_rate(s: &str) -> Result<f32, String> {
+    let rate: f32 = s.parse().map_err(|err| format!("{err}"))?;
+
+    if (0.0..=1.0).contains(&rate) {
+        Ok(rate)
+    } else {
+        Err(String::from("must be in [0.0, 1.0]"))
+    }
+}
+
 fn main() -> Result<()> {
     simple_eyre::install()?;
 
-    ratatui::run(|terminal| run(Args::parse(), terminal))
+    let args = Args::parse();
+
+    ratatui::run(|terminal| run(args, terminal))
 }
 
 #[inline]

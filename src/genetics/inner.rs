@@ -8,7 +8,7 @@ use rayon::vec::IntoIter;
 
 pub fn next_generation<const N: usize>(
     params: &super::GAParams,
-    population_scores: Vec<(Board<N>, u8)>,
+    population_scores: Vec<(Board<N>, u16)>,
 ) -> Vec<Board<N>> {
     make_parents(natural_selection(params, population_scores))
         .flat_map(|parents| make_children::<N>(params, parents))
@@ -17,7 +17,7 @@ pub fn next_generation<const N: usize>(
 
 fn natural_selection<const N: usize>(
     params: &super::GAParams,
-    mut population_scores: Vec<(Board<N>, u8)>,
+    mut population_scores: Vec<(Board<N>, u16)>,
 ) -> Vec<Board<N>> {
     population_scores.par_sort_by_key(|(_, score)| *score);
 
