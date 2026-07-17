@@ -3,8 +3,7 @@ mod inner;
 use crate::errors::NoSolutionFound;
 use crate::sudoku::{Board, Row};
 use arrayvec::ArrayVec;
-use rand::prelude::StdRng;
-use rand::{Rng, SeedableRng, distr::Uniform};
+use rand::{RngExt, SeedableRng, distr::Uniform};
 use rand_pcg::Pcg64Mcg;
 use rayon::prelude::*;
 
@@ -76,7 +75,7 @@ pub fn generate_initial_population<const N: usize>(params: &GAParams) -> Vec<Boa
 
         for _ in 0..N {
             let mut row: ArrayVec<u8, N> = ArrayVec::new_const();
-            let rng = Pcg64Mcg::from_rng(&mut StdRng::from_os_rng());
+            let rng = Pcg64Mcg::from_rng(&mut rand::rng());
             let values: Vec<u8> = rng.sample_iter(values_range).take(N).collect();
 
             for item in &values {

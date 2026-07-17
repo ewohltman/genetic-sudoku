@@ -1,7 +1,6 @@
 use crate::sudoku::{Board, Row};
 use arrayvec::ArrayVec;
-use rand::prelude::StdRng;
-use rand::{Rng, SeedableRng, distr::Uniform};
+use rand::{RngExt, SeedableRng, distr::Uniform};
 use rand_pcg::Pcg64Mcg;
 use rayon::iter::Zip;
 use rayon::prelude::*;
@@ -65,7 +64,7 @@ fn make_children<const N: usize>(
     (0..params.num_children_per_parent_pairs)
         .into_par_iter()
         .map(|_| {
-            let mut rng = Pcg64Mcg::from_rng(&mut StdRng::from_os_rng());
+            let mut rng = Pcg64Mcg::from_rng(&mut rand::rng());
             let mut child: ArrayVec<Row<N>, N> = ArrayVec::new_const();
 
             for i in 0..N {
