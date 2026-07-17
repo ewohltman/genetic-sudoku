@@ -119,14 +119,9 @@ fn run(args: Args, terminal: &mut DefaultTerminal) -> Result<()> {
     let (tx, rx) = sync_channel::<Snapshot>(1);
 
     thread::scope(|scope| {
-        let simulation = {
-            let params = &params;
-            let board = &board;
-            let quit = &quit;
-            let restart = args.restart;
-
-            scope.spawn(move || simulate(params, board, restart, quit, &tx))
-        };
+        // `tx` is moved into `simulate` so it drops when the simulation
+        // thread exits, letting `render_loop` observe the disconnect.
+        let simulation = scope.spawn(|| simulate(&params, &board, args.restart, &quit, tx));
 
         let render_result = render_loop(terminal, start, &rx);
 
@@ -152,12 +147,15 @@ fn run(args: Args, terminal: &mut DefaultTerminal) -> Result<()> {
 /// Publishes a best-effort `Snapshot` of the best board every generation via
 /// `tx`, dropping frames whenever the render loop has not yet consumed the
 /// previous one. The final solved snapshot is always delivered.
+// `tx` is taken by value so it drops when this function returns (or
+// unwinds), disconnecting the channel for `render_loop`.
+#[allow(clippy::needless_pass_by_value)]
 fn simulate(
     params: &genetics::GAParams,
     board: &sudoku::Board<BOARD_SIZE>,
     restart: usize,
     quit: &AtomicBool,
-    tx: &SyncSender<Snapshot>,
+    tx: SyncSender<Snapshot>,
 ) -> Result<(), NoSolutionFound<BOARD_SIZE>> {
     let mut generation: usize = 0;
     let mut best_score = u16::MAX;
@@ -218,12 +216,16 @@ fn render_loop(
     start: Instant,
     rx: &Receiver<Snapshot>,
 ) -> Result<()> {
+    // The last snapshot received, persisted across frames so the display
+    // (including the elapsed duration) keeps updating even when no new
+    // snapshot arrived this frame.
+    let mut latest: Option<Snapshot> = None;
+
     loop {
         if should_quit(POLL_DURATION_RUNNING)? {
             return Ok(());
         }
 
-        let mut latest: Option<Snapshot> = None;
         let mut disconnected = false;
 
         loop {
@@ -237,9 +239,9 @@ fn render_loop(
             }
         }
 
-        if let Some(snapshot) = latest {
+        if let Some(ref snapshot) = latest {
             terminal.draw(|frame: &mut Frame| {
-                frame.render_widget(widget(start, &snapshot), frame.area());
+                frame.render_widget(widget(start, snapshot), frame.area());
             })?;
 
             if snapshot.score == 0 {
