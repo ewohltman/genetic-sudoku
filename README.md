@@ -15,7 +15,7 @@ Arguments:
 
 Options:
   -p, --population <POPULATION>
-          Population per generation [default: 100]
+          Population per generation [default: 75]
   -s, --selection-rate <SELECTION_RATE>
           Fraction of population selected [default: 0.5]
   -m, --mutation-rate <MUTATION_RATE>

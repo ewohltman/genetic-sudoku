@@ -25,7 +25,7 @@ struct Args {
     #[arg(
         short,
         long,
-        default_value_t = 100,
+        default_value_t = 75,
         value_parser = parse_population,
         help = "Population per generation"
     )]
