@@ -1,15 +1,21 @@
 use clap::Parser;
+use genetic_sudoku::errors::NoSolutionFound;
 use genetic_sudoku::{genetics, sudoku};
 use ratatui::crossterm::event::{self, Event};
 use ratatui::{DefaultTerminal, Frame, text::Text};
 use simple_eyre::{Report, Result};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, sync_channel};
+use std::thread;
 use std::time::{Duration, Instant};
 
 // The board size for puzzles. Change this for larger or smaller boards.
 const BOARD_SIZE: usize = 9;
 
-const POLL_DURATION_RUNNING: Duration = Duration::ZERO;
+// Poll timeout while the simulation is running. Doubles as the frame cadence
+// (~30 fps).
+const POLL_DURATION_RUNNING: Duration = Duration::from_millis(33);
 
 const POLL_DURATION_DONE: Duration = Duration::from_millis(100);
 
@@ -44,13 +50,6 @@ struct Args {
     mutation_rate: f32,
 
     #[arg(
-        short,
-        long,
-        help = "Number of generations between screen renders. Higher values give better computational performance"
-    )]
-    render: Option<usize>,
-
-    #[arg(
         long,
         default_value_t = 0,
         help = "Number of generations without improvement before restarting with a new random population (0 = disabled)"
@@ -59,6 +58,15 @@ struct Args {
 
     #[arg(help = "Path to board file")]
     board_path: PathBuf,
+}
+
+/// A point-in-time view of the simulation, published by the simulation thread
+/// for the render loop to draw.
+#[derive(Clone, Copy)]
+struct Snapshot {
+    generation: usize,
+    board: sudoku::Board<BOARD_SIZE>,
+    score: u16,
 }
 
 /// Parses a population argument, requiring `2..=MAX_POPULATION`.
@@ -107,28 +115,69 @@ fn run(args: Args, terminal: &mut DefaultTerminal) -> Result<()> {
     let start = Instant::now();
     let board = sudoku::Board::read(args.board_path)?;
     let params = genetics::GAParams::new(args.population, args.selection_rate, args.mutation_rate);
-    let render = args.render.unwrap_or(1);
+    let quit = AtomicBool::new(false);
+    let (tx, rx) = sync_channel::<Snapshot>(1);
+
+    thread::scope(|scope| {
+        let simulation = {
+            let params = &params;
+            let board = &board;
+            let quit = &quit;
+            let restart = args.restart;
+
+            scope.spawn(move || simulate(params, board, restart, quit, &tx))
+        };
+
+        let render_result = render_loop(terminal, start, &rx);
+
+        // Stop the simulation thread, then drop the receiver so a sender
+        // blocked on a full channel unblocks instead of deadlocking the join.
+        quit.store(true, Ordering::Relaxed);
+        drop(rx);
+
+        let simulation_result = simulation.join();
+
+        render_result?;
+
+        match simulation_result {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(no_solution_found)) => Err(Report::new(no_solution_found)),
+            Err(_) => Err(Report::msg("simulation thread panicked")),
+        }
+    })
+}
+
+/// Runs the genetic algorithm until a solution is found or `quit` is set.
+///
+/// Publishes a best-effort `Snapshot` of the best board every generation via
+/// `tx`, dropping frames whenever the render loop has not yet consumed the
+/// previous one. The final solved snapshot is always delivered.
+fn simulate(
+    params: &genetics::GAParams,
+    board: &sudoku::Board<BOARD_SIZE>,
+    restart: usize,
+    quit: &AtomicBool,
+    tx: &SyncSender<Snapshot>,
+) -> Result<(), NoSolutionFound<BOARD_SIZE>> {
     let mut generation: usize = 0;
     let mut best_score = u16::MAX;
     let mut stagnant_generations: usize = 0;
-    let mut population = genetics::generate_initial_population::<BOARD_SIZE>(&params);
+    let mut population = genetics::generate_initial_population::<BOARD_SIZE>(params);
 
     loop {
-        population = match genetics::run_simulation::<BOARD_SIZE>(&params, &board, population) {
+        population = match genetics::run_simulation::<BOARD_SIZE>(params, board, population) {
             Ok(solution) => {
-                terminal.draw(|frame: &mut Frame| {
-                    frame.render_widget(widget(start, generation, &solution), frame.area());
-                })?;
+                let _ = tx.send(Snapshot {
+                    generation,
+                    board: solution,
+                    score: 0,
+                });
 
-                loop {
-                    if should_quit(POLL_DURATION_DONE)? {
-                        return Ok(());
-                    }
-                }
+                return Ok(());
             }
             Err(no_solution_found) => {
-                if should_quit(POLL_DURATION_RUNNING)? {
-                    return Err(Report::new(no_solution_found));
+                if quit.load(Ordering::Relaxed) {
+                    return Err(no_solution_found);
                 }
 
                 if no_solution_found.best_score < best_score {
@@ -138,27 +187,73 @@ fn run(args: Args, terminal: &mut DefaultTerminal) -> Result<()> {
                     stagnant_generations += 1;
                 }
 
-                if generation.is_multiple_of(render) {
-                    terminal.draw(|frame: &mut Frame| {
-                        frame.render_widget(
-                            widget(start, generation, &no_solution_found.best_board),
-                            frame.area(),
-                        );
-                    })?;
-                }
+                let _ = tx.try_send(Snapshot {
+                    generation,
+                    board: no_solution_found.best_board,
+                    score: no_solution_found.best_score,
+                });
 
                 generation += 1;
 
-                if args.restart > 0 && stagnant_generations >= args.restart {
+                if restart > 0 && stagnant_generations >= restart {
                     best_score = u16::MAX;
                     stagnant_generations = 0;
 
-                    genetics::generate_initial_population::<BOARD_SIZE>(&params)
+                    genetics::generate_initial_population::<BOARD_SIZE>(params)
                 } else {
                     no_solution_found.next_generation
                 }
             }
         };
+    }
+}
+
+/// Draws simulation snapshots at a fixed cadence and handles keyboard input.
+///
+/// Returns `Ok(())` when the user quits, or when the simulation thread has
+/// exited without a solution (its result is surfaced via the join in `run`).
+/// After the solved board is drawn, keeps it displayed until the user quits.
+fn render_loop(
+    terminal: &mut DefaultTerminal,
+    start: Instant,
+    rx: &Receiver<Snapshot>,
+) -> Result<()> {
+    loop {
+        if should_quit(POLL_DURATION_RUNNING)? {
+            return Ok(());
+        }
+
+        let mut latest: Option<Snapshot> = None;
+        let mut disconnected = false;
+
+        loop {
+            match rx.try_recv() {
+                Ok(snapshot) => latest = Some(snapshot),
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => {
+                    disconnected = true;
+                    break;
+                }
+            }
+        }
+
+        if let Some(snapshot) = latest {
+            terminal.draw(|frame: &mut Frame| {
+                frame.render_widget(widget(start, &snapshot), frame.area());
+            })?;
+
+            if snapshot.score == 0 {
+                loop {
+                    if should_quit(POLL_DURATION_DONE)? {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+
+        if disconnected {
+            return Ok(());
+        }
     }
 }
 
@@ -188,10 +283,12 @@ fn should_quit(poll_duration: Duration) -> Result<bool> {
 /// Returns a widget with the current state of the simulation to be rendered.
 #[inline]
 #[must_use]
-fn widget<const N: usize>(start: Instant, generation: usize, board: &sudoku::Board<N>) -> Text<'_> {
+fn widget(start: Instant, snapshot: &Snapshot) -> Text<'static> {
     Text::raw(format!(
-        "Duration: {:?}\nGeneration: {generation}\nScore: {}\n\n{board}",
+        "Duration: {:?}\nGeneration: {}\nScore: {}\n\n{}",
         start.elapsed(),
-        board.fitness(),
+        snapshot.generation,
+        snapshot.score,
+        snapshot.board,
     ))
 }
