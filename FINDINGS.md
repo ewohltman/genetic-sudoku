@@ -13,11 +13,11 @@ A study to find good values for the three genetic-algorithm knobs exposed by the
 The optimal settings are **opposite** for the two boards, which is the headline
 result (see [Cross-board discussion](#cross-board-discussion)):
 
-| Parameter | Default | `default.txt` | `al-escargot.txt` |
-|-----------|---------|---------------|-------------------|
-| `-p` / `--population`     | `100`  | **`75`** (50–100) | **`3000`** (2000–3500) |
-| `-s` / `--selection-rate` | `0.5`  | **`0.5`** (0.4–0.5) | **`0.4`** (0.35–0.5) |
-| `-m` / `--mutation-rate`  | `0.06` | **`0.06`** (default) | **`0.02`** (0.01–0.02) |
+| Parameter                 | Default | `default.txt`        | `al-escargot.txt`      |
+|---------------------------|---------|----------------------|------------------------|
+| `-p` / `--population`     | `100`   | **`75`** (50–100)    | **`3000`** (2000–3500) |
+| `-s` / `--selection-rate` | `0.5`   | **`0.5`** (0.4–0.5)  | **`0.4`** (0.35–0.5)   |
+| `-m` / `--mutation-rate`  | `0.06`  | **`0.06`** (default) | **`0.02`** (0.01–0.02) |
 
 ```bash
 # default.txt — solves in ~0.2 s
@@ -81,10 +81,10 @@ mutation) actively *hurt* here.
 
 ### 1. Population sweep (`-s 0.5 -m 0.06`)
 
-| population | 20 | 30 | 50 | 75 | 100 | 150 | 200 | 400 | 800 | 1500 |
-|-----------:|---:|---:|---:|---:|----:|----:|----:|----:|----:|-----:|
-| solve rate | 0% | 0% | **100%** | **100%** | 100% | 60% | 50% | 25% | 25% | 12% |
-| median solve time (s) | — | — | 0.57 | **0.22** | 1.1 | 2.4 | 4.6 | — | — | — |
+|            population | 20 | 30 |       50 |       75 |  100 | 150 | 200 | 400 | 800 | 1500 |
+|----------------------:|---:|---:|---------:|---------:|-----:|----:|----:|----:|----:|-----:|
+|            solve rate | 0% | 0% | **100%** | **100%** | 100% | 60% | 50% | 25% | 25% |  12% |
+| median solve time (s) |  — |  — |     0.57 | **0.22** |  1.1 | 2.4 | 4.6 |   — |   — |    — |
 
 A clear **window optimum at population 50–100** (best throughput at ~75, ~0.2 s):
 
@@ -102,11 +102,11 @@ converges genetically and stalls.
 
 Solve rate (median solve time in parentheses where solved):
 
-| `-s` / `-m` | 0.02 | 0.06 | 0.12 |
-|------------:|-----:|-----:|-----:|
-| **0.3** | 0% | 88% (1.5 s) | 0% |
-| **0.5** | 0% | **100% (1.15 s)** | 0% |
-| **0.7** | 0% | 0% | 0% |
+| `-s` / `-m` | 0.02 |              0.06 | 0.12 |
+|------------:|-----:|------------------:|-----:|
+|     **0.3** |   0% |       88% (1.5 s) |   0% |
+|     **0.5** |   0% | **100% (1.15 s)** |   0% |
+|     **0.7** |   0% |                0% |   0% |
 
 - **Mutation `0.06` (the default) is optimal.** `0.02` is *too low* here — the
   population converges to a near-solution (~5–9 conflicts) and can't take the
@@ -131,8 +131,8 @@ down to ~2–6, but **no tested setting ever fully solves it** (see caveat).
 
 ### 1. Population sweep (`-s 0.5 -m 0.06`, 20 s, 3 trials)
 
-| population | 200 | 500 | 1000 | 2000 | 3500 | 5000 |
-|-----------:|----:|----:|-----:|-----:|-----:|-----:|
+|       population |  200 |  500 | 1000 | 2000 |     3500 | 5000 |
+|-----------------:|-----:|-----:|-----:|-----:|---------:|-----:|
 | mean final score | 19.7 | 15.3 | 14.3 | 15.0 | **11.0** | 13.7 |
 
 Bigger population helps up to ~3500 (one trial reached score **7**). Past that it
@@ -142,12 +142,12 @@ reverses — a 5000-member population fits fewer generations into the budget.
 
 Mean final score (lower = better):
 
-| `-s` / `-m` | 0.02 | 0.06 | 0.10 | 0.16 |
-|------------:|-----:|-----:|-----:|-----:|
-| **0.20** | 7.7 | 7.7 | 17.3 | 47.7 |
-| **0.35** | **3.0** | 10.3 | 33.7 | 37.7 |
-| **0.50** | 5.0 | 15.3 | 49.0 | 54.3 |
-| **0.65** | 5.0 | 17.0 | 52.3 | 55.7 |
+| `-s` / `-m` |    0.02 | 0.06 | 0.10 | 0.16 |
+|------------:|--------:|-----:|-----:|-----:|
+|    **0.20** |     7.7 |  7.7 | 17.3 | 47.7 |
+|    **0.35** | **3.0** | 10.3 | 33.7 | 37.7 |
+|    **0.50** |     5.0 | 15.3 | 49.0 | 54.3 |
+|    **0.65** |     5.0 | 17.0 | 52.3 | 55.7 |
 
 - **Mutation is the dominant lever, and low wins.** `0.02` beats every other value
   in every row; the default `0.06` is markedly worse; `≥0.10` is catastrophic (too
@@ -158,11 +158,11 @@ Mean final score (lower = better):
 
 Mean final score:
 
-| `-s` / `-m` | 0.005 | 0.01 | 0.02 | 0.03 |
-|------------:|------:|-----:|-----:|-----:|
-| **0.30** | 6.0 | 9.7 | 7.0 | 25.7 |
-| **0.40** | 8.0 | 9.0 | **5.0** | 7.3 |
-| **0.50** | 5.3 | 5.0 | 5.7 | 7.0 |
+| `-s` / `-m` | 0.005 | 0.01 |    0.02 | 0.03 |
+|------------:|------:|-----:|--------:|-----:|
+|    **0.30** |   6.0 |  9.7 |     7.0 | 25.7 |
+|    **0.40** |   8.0 |  9.0 | **5.0** |  7.3 |
+|    **0.50** |   5.3 |  5.0 |     5.7 |  7.0 |
 
 The `0.005–0.02` mutation range is a **broad plateau** (mean ~5–9; several single
 trials reached **2**). Below ~0.01 gives no further gain; selection `0.35–0.5` is
@@ -170,13 +170,13 @@ a wide, forgiving optimum.
 
 ### 4. Does it ever solve? (long budgets & restart)
 
-| config | budget | trials | solved | best score | ~generations |
-|--------|-------:|-------:|-------:|-----------:|-------------:|
-| `-p 3500 -s 0.4 -m 0.02` | 120 s | 2 | 0 | 6 | — |
-| `-p 2000 -s 0.4 -m 0.02` | 120 s | 2 | 0 | 6 | — |
-| `-p 1000 -s 0.4 -m 0.02 --restart 500` | 90 s | 3 | 0 | 6 | 300,000 |
-| `-p 2000 -s 0.4 -m 0.02 --restart 800` | 90 s | 3 | 0 | 5 | 200,000 |
-| `-p 3500 -s 0.35 -m 0.02 --restart 1000` | 90 s | 3 | 0 | **3** | 100,000 |
+| config                                   | budget | trials | solved | best score | ~generations |
+|------------------------------------------|-------:|-------:|-------:|-----------:|-------------:|
+| `-p 3500 -s 0.4 -m 0.02`                 |  120 s |      2 |      0 |          6 |            — |
+| `-p 2000 -s 0.4 -m 0.02`                 |  120 s |      2 |      0 |          6 |            — |
+| `-p 1000 -s 0.4 -m 0.02 --restart 500`   |   90 s |      3 |      0 |          6 |      300,000 |
+| `-p 2000 -s 0.4 -m 0.02 --restart 800`   |   90 s |      3 |      0 |          5 |      200,000 |
+| `-p 3500 -s 0.35 -m 0.02 --restart 1000` |   90 s |      3 |      0 |      **3** |      100,000 |
 
 Neither more time nor population restarts (hundreds of independent fresh attempts)
 produced a solution. The GA converges within a few *hundred* generations and the
@@ -198,11 +198,11 @@ hard puzzle, not of the parameter values. The recommended settings are what get
 
 The two boards want **opposite** settings on two of the three knobs:
 
-| Knob | `default.txt` (easy) | `al-escargot.txt` (hard) | Why |
-|------|----------------------|--------------------------|-----|
-| Population | **small** (50–100) | **large** (~3000) | Easy board: small pop = more generations/sec + enough drift to finish. Hard board: large pop = broader exploration to push residual conflicts down; small pop converges to junk. |
-| Mutation | **0.06** (moderate) | **0.02** (low) | Easy board *is* solvable, so you need enough mutation to take the final step to 0. Hard board never reaches 0, so low mutation minimizes residual conflicts; higher just adds noise. |
-| Selection | 0.5 | 0.4 | Both prefer a moderate 0.35–0.5 (real selection pressure). `0.7` fails on the easy board — too many survivors, no elitism. |
+| Knob       | `default.txt` (easy) | `al-escargot.txt` (hard) | Why                                                                                                                                                                                  |
+|------------|----------------------|--------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Population | **small** (50–100)   | **large** (~3000)        | Easy board: small pop = more generations/sec + enough drift to finish. Hard board: large pop = broader exploration to push residual conflicts down; small pop converges to junk.     |
+| Mutation   | **0.06** (moderate)  | **0.02** (low)           | Easy board *is* solvable, so you need enough mutation to take the final step to 0. Hard board never reaches 0, so low mutation minimizes residual conflicts; higher just adds noise. |
+| Selection  | 0.5                  | 0.4                      | Both prefer a moderate 0.35–0.5 (real selection pressure). `0.7` fails on the easy board — too many survivors, no elitism.                                                           |
 
 **The practical lesson: there is no single best parameter set — it depends on
 puzzle difficulty.**
