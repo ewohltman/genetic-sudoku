@@ -3,6 +3,8 @@ use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result};
 
 pub struct NoSolutionFound<const N: usize> {
+    pub best_board: Board<N>,
+    pub best_score: u16,
     pub next_generation: Vec<Board<N>>,
 }
 

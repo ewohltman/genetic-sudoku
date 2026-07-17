@@ -112,8 +112,13 @@ pub fn generate_initial_population<const N: usize>(params: &GAParams) -> Vec<Boa
 ///
 /// # Errors
 ///
-/// Will return `Err(NoSolutionFound)` containing the next generation if a
-/// valid solution was not found.
+/// Will return `Err(NoSolutionFound)` containing the next generation, along
+/// with the best candidate board and its score, if a valid solution was not
+/// found.
+///
+/// # Panics
+///
+/// Panics if the given population is empty.
 #[inline]
 pub fn run_simulation<const N: usize>(
     params: &GAParams,
@@ -130,14 +135,22 @@ pub fn run_simulation<const N: usize>(
         })
         .collect();
 
-    #[allow(clippy::option_if_let_else)] // Prevent cloning population_scores.
-    match population_scores
+    if let Some(solution) = population_scores
         .iter()
         .find(|board_score| board_score.1 == 0)
     {
-        Some(solution) => Ok(solution.0),
-        None => Err(NoSolutionFound {
-            next_generation: inner::next_generation::<N>(params, population_scores),
-        }),
+        return Ok(solution.0);
     }
+
+    let (best_board, best_score) = population_scores
+        .iter()
+        .copied()
+        .min_by_key(|(_, score)| *score)
+        .expect("population must not be empty");
+
+    Err(NoSolutionFound {
+        best_board,
+        best_score,
+        next_generation: inner::next_generation::<N>(params, population_scores),
+    })
 }

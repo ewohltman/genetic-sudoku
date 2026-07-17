@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 // The board size for puzzles. Change this for larger or smaller boards.
 const BOARD_SIZE: usize = 9;
 
-const POLL_DURATION_RUNNING: Duration = Duration::from_nanos(1);
+const POLL_DURATION_RUNNING: Duration = Duration::ZERO;
 
 const POLL_DURATION_DONE: Duration = Duration::from_millis(100);
 
@@ -49,6 +49,13 @@ struct Args {
         help = "Number of generations between screen renders. Higher values give better computational performance"
     )]
     render: Option<usize>,
+
+    #[arg(
+        long,
+        default_value_t = 0,
+        help = "Number of generations without improvement before restarting with a new random population (0 = disabled)"
+    )]
+    restart: usize,
 
     #[arg(help = "Path to board file")]
     board_path: PathBuf,
@@ -102,6 +109,8 @@ fn run(args: Args, terminal: &mut DefaultTerminal) -> Result<()> {
     let params = genetics::GAParams::new(args.population, args.selection_rate, args.mutation_rate);
     let render = args.render.unwrap_or(1);
     let mut generation: usize = 0;
+    let mut best_score = u16::MAX;
+    let mut stagnant_generations: usize = 0;
     let mut population = genetics::generate_initial_population::<BOARD_SIZE>(&params);
 
     loop {
@@ -122,17 +131,32 @@ fn run(args: Args, terminal: &mut DefaultTerminal) -> Result<()> {
                     return Err(Report::new(no_solution_found));
                 }
 
-                if generation % render == 0 {
-                    let best_board = no_solution_found.next_generation[0];
+                if no_solution_found.best_score < best_score {
+                    best_score = no_solution_found.best_score;
+                    stagnant_generations = 0;
+                } else {
+                    stagnant_generations += 1;
+                }
 
+                if generation % render == 0 {
                     terminal.draw(|frame: &mut Frame| {
-                        frame.render_widget(widget(start, generation, &best_board), frame.area());
+                        frame.render_widget(
+                            widget(start, generation, &no_solution_found.best_board),
+                            frame.area(),
+                        );
                     })?;
                 }
 
                 generation += 1;
 
-                no_solution_found.next_generation
+                if args.restart > 0 && stagnant_generations >= args.restart {
+                    best_score = u16::MAX;
+                    stagnant_generations = 0;
+
+                    genetics::generate_initial_population::<BOARD_SIZE>(&params)
+                } else {
+                    no_solution_found.next_generation
+                }
             }
         };
     }
