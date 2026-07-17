@@ -1,10 +1,11 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use genetic_sudoku::genetics;
 use genetic_sudoku::genetics::GAParams;
 use genetic_sudoku::sudoku::{Board, Row};
 use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng, rng};
 use rand_pcg::Pcg64Mcg;
+use std::hint::black_box;
 use std::time::Duration;
 
 const BOARD_SIZE_9: usize = 9;
