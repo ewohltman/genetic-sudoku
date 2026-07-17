@@ -12,13 +12,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - name: Run fmt
         run: make fmt
       - name: Run clippy
         run: make clippy
       - name: Run tests
         run: make test
-      - name: Run benchmarks
-        run: make bench
+      - name: Check benchmarks
+        run: make bench-check
       - name: Build binary
         run: make build
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/audit@v1

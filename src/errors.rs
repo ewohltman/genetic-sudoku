@@ -1,5 +1,3 @@
-#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
-
 use super::sudoku::Board;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result};

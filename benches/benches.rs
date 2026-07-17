@@ -1,11 +1,3 @@
-#![warn(
-    clippy::all,
-    // clippy::restriction,
-    clippy::pedantic,
-    clippy::nursery,
-    clippy::cargo
-)]
-
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use genetic_sudoku::genetics;
 use genetic_sudoku::genetics::GAParams;

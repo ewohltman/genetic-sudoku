@@ -7,7 +7,8 @@ repository = "https://github.com/ewohltman/genetic-sudoku"
 keywords = ["sudoku", "solver", "genetic", "algorithm"]
 categories = ["algorithms", "games"]
 description = "Genetic Algorithm Sudoku solver"
-license-file = "LICENSE"
+license = "MIT"
+rust-version = "1.85"
 
 [dependencies]
 arrayvec = "0.7"
@@ -25,3 +26,9 @@ criterion = "0.5.1"
 [[bench]]
 name = "benches"
 harness = false
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }

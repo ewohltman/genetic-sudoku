@@ -1,5 +1,3 @@
-#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
-
 use clap::Parser;
 use crossterm::event::{self, Event};
 use genetic_sudoku::{genetics, sudoku};
@@ -126,7 +124,7 @@ fn should_quit(poll_duration: Duration) -> Result<bool> {
 /// Returns a widget with the current state of the simulation to be rendered.
 #[inline]
 #[must_use]
-fn widget<const N: usize>(start: Instant, generation: usize, board: &sudoku::Board<N>) -> Text {
+fn widget<const N: usize>(start: Instant, generation: usize, board: &sudoku::Board<N>) -> Text<'_> {
     Text::raw(format!(
         "Duration: {:?}\nGeneration: {generation}\nScore: {}\n\n{board}",
         start.elapsed(),

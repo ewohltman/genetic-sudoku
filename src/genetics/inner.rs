@@ -1,5 +1,3 @@
-#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
-
 use crate::sudoku::{Board, Row};
 use arrayvec::ArrayVec;
 use rand::prelude::StdRng;

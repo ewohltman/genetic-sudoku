@@ -13,7 +13,7 @@ fmt:
 
 .PHONY: clippy
 clippy:
-	cargo clippy --all-targets
+	cargo clippy --all-targets -- -D warnings
 
 .PHONY: test
 test:
@@ -22,6 +22,10 @@ test:
 .PHONY: bench
 bench:
 	cargo bench
+
+.PHONY: bench-check
+bench-check:
+	cargo bench --no-run
 
 .PHONY: build
 build:
@@ -32,7 +36,7 @@ install:
 	cargo install --path .
 
 .PHONY: ci
-ci: clean fmt clippy test bench build
+ci: fmt clippy test bench-check build
 
 .PHONY: vhs
 vhs:
