@@ -2,6 +2,7 @@
 /.idea
 
 # Build artifacts
+.claude/worktrees
 /target
 
 # Performance testing data

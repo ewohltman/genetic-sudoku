@@ -20,8 +20,6 @@ Options:
           Fraction of population selected [default: 0.5]
   -m, --mutation-rate <MUTATION_RATE>
           Mutation rate as fraction [default: 0.06]
-  -r, --render <RENDER>
-          Number of generations between screen renders. Higher values give better computational performance
       --restart <RESTART>
           Number of generations without improvement before restarting with a new random population (0 = disabled) [default: 0]
   -h, --help
@@ -40,10 +38,6 @@ The `--population`, `--selection-rate`, and `--mutation-rate` arguments specify
 the parameters used in running the genetic algorithm described below. There are
 sensible defaults for all of these. Note that the "fraction" arguments expect a
 floating-point number between 0.0 and 1.0.
-
-The optional `--render` argument specifies the number of generations between
-screen renders. The higher the value the less often the screen will be rendered
-with updates, allowing more CPU time for running the simulation.
 
 The optional `--restart` argument specifies the number of generations without
 an improvement in the best fitness score before the population is discarded
