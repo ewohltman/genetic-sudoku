@@ -1,6 +1,6 @@
 use clap::Parser;
-use crossterm::event::{self, Event};
 use genetic_sudoku::{genetics, sudoku};
+use ratatui::crossterm::event::{self, Event};
 use ratatui::{DefaultTerminal, Frame, text::Text};
 use simple_eyre::{Report, Result};
 use std::path::PathBuf;
@@ -49,15 +49,11 @@ struct Args {
 fn main() -> Result<()> {
     simple_eyre::install()?;
 
-    let result = run(Args::parse(), ratatui::init());
-
-    ratatui::restore();
-
-    result
+    ratatui::run(|terminal| run(Args::parse(), terminal))
 }
 
 #[inline]
-fn run(args: Args, mut terminal: DefaultTerminal) -> Result<()> {
+fn run(args: Args, terminal: &mut DefaultTerminal) -> Result<()> {
     let start = Instant::now();
     let board = sudoku::Board::read(args.board_path)?;
     let params = genetics::GAParams::new(args.population, args.selection_rate, args.mutation_rate);
@@ -102,20 +98,21 @@ fn run(args: Args, mut terminal: DefaultTerminal) -> Result<()> {
 /// Returns whether we should quit because Ctrl+c, q, or escape was pressed.
 #[inline]
 fn should_quit(poll_duration: Duration) -> Result<bool> {
-    if event::poll(poll_duration)? {
-        if let Event::Key(key) = event::read()? {
-            let ctrl = key.modifiers.contains(event::KeyModifiers::CONTROL);
-            let c = key.code == event::KeyCode::Char('c');
+    if event::poll(poll_duration)?
+        && let Event::Key(key) = event::read()?
+        && key.is_press()
+    {
+        let ctrl = key.modifiers.contains(event::KeyModifiers::CONTROL);
+        let c = key.code == event::KeyCode::Char('c');
 
-            if ctrl && c {
-                return Ok(true);
-            }
-
-            return Ok(matches!(
-                key.code,
-                event::KeyCode::Char('q') | event::KeyCode::Esc
-            ));
+        if ctrl && c {
+            return Ok(true);
         }
+
+        return Ok(matches!(
+            key.code,
+            event::KeyCode::Char('q') | event::KeyCode::Esc
+        ));
     }
 
     Ok(false)
