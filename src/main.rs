@@ -1,8 +1,6 @@
-#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
-
 use clap::Parser;
-use crossterm::event::{self, Event};
 use genetic_sudoku::{genetics, sudoku};
+use ratatui::crossterm::event::{self, Event};
 use ratatui::{DefaultTerminal, Frame, text::Text};
 use simple_eyre::{Report, Result};
 use std::path::PathBuf;
@@ -11,20 +9,27 @@ use std::time::{Duration, Instant};
 // The board size for puzzles. Change this for larger or smaller boards.
 const BOARD_SIZE: usize = 9;
 
-const POLL_DURATION_RUNNING: Duration = Duration::from_nanos(1);
+const POLL_DURATION_RUNNING: Duration = Duration::ZERO;
 
 const POLL_DURATION_DONE: Duration = Duration::from_millis(100);
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, default_value_t = 100, help = "Population per generation")]
+    #[arg(
+        short,
+        long,
+        default_value_t = 100,
+        value_parser = parse_population,
+        help = "Population per generation"
+    )]
     population: usize,
 
     #[arg(
         short,
         long,
         default_value_t = 0.5,
+        value_parser = parse_selection_rate,
         help = "Fraction of population selected"
     )]
     selection_rate: f32,
@@ -33,6 +38,7 @@ struct Args {
         short,
         long,
         default_value_t = 0.06,
+        value_parser = parse_mutation_rate,
         help = "Mutation rate as fraction"
     )]
     mutation_rate: f32,
@@ -44,27 +50,67 @@ struct Args {
     )]
     render: Option<usize>,
 
+    #[arg(
+        long,
+        default_value_t = 0,
+        help = "Number of generations without improvement before restarting with a new random population (0 = disabled)"
+    )]
+    restart: usize,
+
     #[arg(help = "Path to board file")]
     board_path: PathBuf,
+}
+
+/// Parses a population argument, requiring `2..=MAX_POPULATION`.
+fn parse_population(s: &str) -> Result<usize, String> {
+    let population: usize = s.parse().map_err(|err| format!("{err}"))?;
+
+    if (2..=genetics::MAX_POPULATION).contains(&population) {
+        Ok(population)
+    } else {
+        Err(format!("must be in 2..={}", genetics::MAX_POPULATION))
+    }
+}
+
+/// Parses a selection rate argument, requiring `(0.0, 1.0]`.
+fn parse_selection_rate(s: &str) -> Result<f32, String> {
+    let rate: f32 = s.parse().map_err(|err| format!("{err}"))?;
+
+    if rate > 0.0 && rate <= 1.0 {
+        Ok(rate)
+    } else {
+        Err(String::from("must be in (0.0, 1.0]"))
+    }
+}
+
+/// Parses a mutation rate argument, requiring `[0.0, 1.0]`.
+fn parse_mutation_rate(s: &str) -> Result<f32, String> {
+    let rate: f32 = s.parse().map_err(|err| format!("{err}"))?;
+
+    if (0.0..=1.0).contains(&rate) {
+        Ok(rate)
+    } else {
+        Err(String::from("must be in [0.0, 1.0]"))
+    }
 }
 
 fn main() -> Result<()> {
     simple_eyre::install()?;
 
-    let result = run(Args::parse(), ratatui::init());
+    let args = Args::parse();
 
-    ratatui::restore();
-
-    result
+    ratatui::run(|terminal| run(args, terminal))
 }
 
 #[inline]
-fn run(args: Args, mut terminal: DefaultTerminal) -> Result<()> {
+fn run(args: Args, terminal: &mut DefaultTerminal) -> Result<()> {
     let start = Instant::now();
     let board = sudoku::Board::read(args.board_path)?;
     let params = genetics::GAParams::new(args.population, args.selection_rate, args.mutation_rate);
     let render = args.render.unwrap_or(1);
     let mut generation: usize = 0;
+    let mut best_score = u16::MAX;
+    let mut stagnant_generations: usize = 0;
     let mut population = genetics::generate_initial_population::<BOARD_SIZE>(&params);
 
     loop {
@@ -85,17 +131,32 @@ fn run(args: Args, mut terminal: DefaultTerminal) -> Result<()> {
                     return Err(Report::new(no_solution_found));
                 }
 
-                if generation % render == 0 {
-                    let best_board = no_solution_found.next_generation[0];
+                if no_solution_found.best_score < best_score {
+                    best_score = no_solution_found.best_score;
+                    stagnant_generations = 0;
+                } else {
+                    stagnant_generations += 1;
+                }
 
+                if generation.is_multiple_of(render) {
                     terminal.draw(|frame: &mut Frame| {
-                        frame.render_widget(widget(start, generation, &best_board), frame.area());
+                        frame.render_widget(
+                            widget(start, generation, &no_solution_found.best_board),
+                            frame.area(),
+                        );
                     })?;
                 }
 
                 generation += 1;
 
-                no_solution_found.next_generation
+                if args.restart > 0 && stagnant_generations >= args.restart {
+                    best_score = u16::MAX;
+                    stagnant_generations = 0;
+
+                    genetics::generate_initial_population::<BOARD_SIZE>(&params)
+                } else {
+                    no_solution_found.next_generation
+                }
             }
         };
     }
@@ -104,20 +165,21 @@ fn run(args: Args, mut terminal: DefaultTerminal) -> Result<()> {
 /// Returns whether we should quit because Ctrl+c, q, or escape was pressed.
 #[inline]
 fn should_quit(poll_duration: Duration) -> Result<bool> {
-    if event::poll(poll_duration)? {
-        if let Event::Key(key) = event::read()? {
-            let ctrl = key.modifiers.contains(event::KeyModifiers::CONTROL);
-            let c = key.code == event::KeyCode::Char('c');
+    if event::poll(poll_duration)?
+        && let Event::Key(key) = event::read()?
+        && key.is_press()
+    {
+        let ctrl = key.modifiers.contains(event::KeyModifiers::CONTROL);
+        let c = key.code == event::KeyCode::Char('c');
 
-            if ctrl && c {
-                return Ok(true);
-            }
-
-            return Ok(matches!(
-                key.code,
-                event::KeyCode::Char('q') | event::KeyCode::Esc
-            ));
+        if ctrl && c {
+            return Ok(true);
         }
+
+        return Ok(matches!(
+            key.code,
+            event::KeyCode::Char('q') | event::KeyCode::Esc
+        ));
     }
 
     Ok(false)
@@ -126,7 +188,7 @@ fn should_quit(poll_duration: Duration) -> Result<bool> {
 /// Returns a widget with the current state of the simulation to be rendered.
 #[inline]
 #[must_use]
-fn widget<const N: usize>(start: Instant, generation: usize, board: &sudoku::Board<N>) -> Text {
+fn widget<const N: usize>(start: Instant, generation: usize, board: &sudoku::Board<N>) -> Text<'_> {
     Text::raw(format!(
         "Duration: {:?}\nGeneration: {generation}\nScore: {}\n\n{board}",
         start.elapsed(),

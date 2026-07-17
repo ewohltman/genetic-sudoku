@@ -1,1 +1,14 @@
-allowed-duplicate-crates = ["unicode-width", "wasi", "windows-sys", "zerocopy", "zerocopy-derive"]
+allowed-duplicate-crates = [
+    "bitflags",
+    "cpufeatures",
+    "getrandom",
+    "hashbrown",
+    "itertools",
+    "r-efi",
+    "rand",
+    "rand_core",
+    "syn",
+    "thiserror",
+    "thiserror-impl",
+    "windows-sys",
+]

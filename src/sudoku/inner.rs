@@ -1,5 +1,3 @@
-#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
-
 #[derive(Debug, Default)]
 pub struct Scorer {
     seen: u64,
@@ -8,7 +6,7 @@ pub struct Scorer {
 
 impl Scorer {
     #[inline]
-    pub fn check(&mut self, digit: u8) {
+    pub const fn check(&mut self, digit: u8) {
         let bit = 1 << digit;
 
         if self.seen & bit != 0 {

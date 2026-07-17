@@ -2,11 +2,10 @@ mod inner;
 
 use crate::errors::NoSolutionFound;
 use crate::sudoku::{Board, Row};
-use arrayvec::ArrayVec;
-use rand::prelude::StdRng;
-use rand::{Rng, SeedableRng, distr::Uniform};
+use rand::{RngExt, SeedableRng, distr::Uniform};
 use rand_pcg::Pcg64Mcg;
 use rayon::prelude::*;
+use std::array;
 
 pub const MAX_POPULATION: usize = 100_000;
 
@@ -23,16 +22,30 @@ impl GAParams {
     /// # Arguments
     ///
     /// * `population` - the size of the population to use
-    /// * `frac_reduction` - the fractional value of survivors per generation
+    /// * `selection_rate` - the fraction of survivors per generation
     /// * `mutation_rate` - the rate at which values should mutate
-    /// * `restart` - the number of generations before a population restart
     ///
     /// # Panics
-    /// Panics if the given population is greater than `MAX_POPULATION`.
+    ///
+    /// Panics if the given population is greater than `MAX_POPULATION`, if
+    /// `selection_rate` is not in `(0.0, 1.0]`, if `mutation_rate` is not in
+    /// `[0.0, 1.0]`, or if `population * selection_rate` yields fewer than
+    /// two survivors.
     #[inline]
     #[must_use]
     pub fn new(population: usize, selection_rate: f32, mutation_rate: f32) -> Self {
-        assert!(population <= MAX_POPULATION);
+        assert!(
+            population <= MAX_POPULATION,
+            "population must not exceed {MAX_POPULATION}"
+        );
+        assert!(
+            selection_rate > 0.0 && selection_rate <= 1.0,
+            "selection_rate must be in (0.0, 1.0]"
+        );
+        assert!(
+            (0.0..=1.0).contains(&mutation_rate),
+            "mutation_rate must be in [0.0, 1.0]"
+        );
 
         #[allow(
             clippy::cast_sign_loss,
@@ -40,6 +53,12 @@ impl GAParams {
             clippy::cast_precision_loss
         )]
         let num_survivors = (population as f32 * selection_rate).floor() as usize;
+
+        assert!(
+            num_survivors >= 2,
+            "population * selection_rate must yield at least two survivors"
+        );
+
         let num_parent_pairs = num_survivors / 2;
         let num_children_per_parent_pairs = population / num_parent_pairs;
 
@@ -62,34 +81,21 @@ impl GAParams {
 ///
 /// # Panics
 ///
-/// Potentially panics if intermediate vectors cannot be converted to fixed
-/// sized arrays.
+/// Panics if the board size, N, exceeds 255.
 #[inline]
 #[must_use]
 pub fn generate_initial_population<const N: usize>(params: &GAParams) -> Vec<Board<N>> {
     let max_digit = u8::try_from(N).expect("digit size exceeds 255");
     let values_range = Uniform::new_inclusive(1, max_digit).expect("invalid value range");
-    let mut boards: Vec<Board<N>> = Vec::with_capacity(params.population);
+    let mut rng = Pcg64Mcg::from_rng(&mut rand::rng());
 
-    for _ in 0..params.population {
-        let mut board: ArrayVec<Row<N>, N> = ArrayVec::new_const();
-
-        for _ in 0..N {
-            let mut row: ArrayVec<u8, N> = ArrayVec::new_const();
-            let rng = Pcg64Mcg::from_rng(&mut StdRng::from_os_rng());
-            let values: Vec<u8> = rng.sample_iter(values_range).take(N).collect();
-
-            for item in &values {
-                row.push(*item);
-            }
-
-            board.push(Row(row.into_inner().unwrap()));
-        }
-
-        boards.push(Board(board.into_inner().unwrap()));
-    }
-
-    boards
+    (0..params.population)
+        .map(|_| {
+            Board(array::from_fn(|_| {
+                Row(array::from_fn(|_| rng.sample(values_range)))
+            }))
+        })
+        .collect()
 }
 
 /// Runs the simulation.
@@ -100,23 +106,27 @@ pub fn generate_initial_population<const N: usize>(params: &GAParams) -> Vec<Boa
 /// # Arguments
 ///
 /// * `params` - GA parameters
-/// * `generation` - the current generation counter
 /// * `base` - The base Board to find solutions for
 /// * `population` - The population to evaluate fitness for
 ///
 /// # Errors
 ///
-/// Will return `Err(NoSolutionFound)` containing the next generation if a
-/// valid solution was not found.
+/// Will return `Err(NoSolutionFound)` containing the next generation, along
+/// with the best candidate board and its score, if a valid solution was not
+/// found.
+///
+/// # Panics
+///
+/// Panics if the given population is empty.
 #[inline]
 pub fn run_simulation<const N: usize>(
     params: &GAParams,
     base: &Board<N>,
     population: Vec<Board<N>>,
 ) -> Result<Board<N>, NoSolutionFound<N>> {
-    let population_scores: Vec<(Board<N>, u8)> = population
+    let population_scores: Vec<(Board<N>, u16)> = population
         .into_par_iter()
-        .map(|candidate| -> (Board<N>, u8) {
+        .map(|candidate| -> (Board<N>, u16) {
             let solution = base.overlay(&candidate);
             let score = solution.fitness();
 
@@ -124,14 +134,22 @@ pub fn run_simulation<const N: usize>(
         })
         .collect();
 
-    #[allow(clippy::option_if_let_else)] // Prevent cloning population_scores.
-    match population_scores
+    if let Some(solution) = population_scores
         .iter()
         .find(|board_score| board_score.1 == 0)
     {
-        Some(solution) => Ok(solution.0),
-        None => Err(NoSolutionFound {
-            next_generation: inner::next_generation::<N>(params, population_scores),
-        }),
+        return Ok(solution.0);
     }
+
+    let (best_board, best_score) = population_scores
+        .iter()
+        .copied()
+        .min_by_key(|(_, score)| *score)
+        .expect("population must not be empty");
+
+    Err(NoSolutionFound {
+        best_board,
+        best_score,
+        next_generation: inner::next_generation::<N>(params, population_scores),
+    })
 }

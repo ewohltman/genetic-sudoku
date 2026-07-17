@@ -1,10 +1,10 @@
-#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
-
 use super::sudoku::Board;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Result};
 
 pub struct NoSolutionFound<const N: usize> {
+    pub best_board: Board<N>,
+    pub best_score: u16,
     pub next_generation: Vec<Board<N>>,
 }
 

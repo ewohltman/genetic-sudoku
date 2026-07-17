@@ -1,18 +1,10 @@
-#![warn(
-    clippy::all,
-    // clippy::restriction,
-    clippy::pedantic,
-    clippy::nursery,
-    clippy::cargo
-)]
-
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use genetic_sudoku::genetics;
 use genetic_sudoku::genetics::GAParams;
 use genetic_sudoku::sudoku::{Board, Row};
-use rand::prelude::StdRng;
-use rand::{Rng, SeedableRng, rng};
+use rand::{RngExt, SeedableRng, rng};
 use rand_pcg::Pcg64Mcg;
+use std::hint::black_box;
 use std::time::Duration;
 
 const BOARD_SIZE_9: usize = 9;
@@ -76,7 +68,7 @@ fn bench_rng(c: &mut Criterion) {
 }
 
 fn bench_pcg64mcg(c: &mut Criterion) {
-    let mut rng = Pcg64Mcg::from_rng(&mut StdRng::from_os_rng());
+    let mut rng = Pcg64Mcg::from_rng(&mut rng());
 
     c.bench_function("Pcg64Mcg", |b| {
         b.iter(|| black_box(&mut rng).random::<f32>());
