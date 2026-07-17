@@ -10,5 +10,4 @@ allowed-duplicate-crates = [
     "syn",
     "thiserror",
     "thiserror-impl",
-    "windows-sys",
 ]
