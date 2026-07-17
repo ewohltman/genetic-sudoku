@@ -106,7 +106,6 @@ pub fn generate_initial_population<const N: usize>(params: &GAParams) -> Vec<Boa
 /// # Arguments
 ///
 /// * `params` - GA parameters
-/// * `generation` - the current generation counter
 /// * `base` - The base Board to find solutions for
 /// * `population` - The population to evaluate fitness for
 ///

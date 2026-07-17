@@ -138,7 +138,7 @@ fn run(args: Args, terminal: &mut DefaultTerminal) -> Result<()> {
                     stagnant_generations += 1;
                 }
 
-                if generation % render == 0 {
+                if generation.is_multiple_of(render) {
                     terminal.draw(|frame: &mut Frame| {
                         frame.render_widget(
                             widget(start, generation, &no_solution_found.best_board),

@@ -205,7 +205,7 @@ impl<const N: usize> Display for Board<N> {
         for (i, row) in self.0.iter().enumerate() {
             writeln!(f, "{row}")?;
 
-            if i != 0 && (i + 1) % box_size == 0 && i < self.0.len() - 1 {
+            if i != 0 && (i + 1).is_multiple_of(box_size) && i < self.0.len() - 1 {
                 writeln!(f, "{}", "--".repeat(N + 2))?;
             }
         }
@@ -235,7 +235,7 @@ impl<const N: usize> Display for Row<N> {
             if i < self.0.len() - 1 {
                 write!(f, " ")?;
 
-                if i != 0 && (i + 1) % box_size == 0 {
+                if i != 0 && (i + 1).is_multiple_of(box_size) {
                     write!(f, "| ")?;
                 }
             }
