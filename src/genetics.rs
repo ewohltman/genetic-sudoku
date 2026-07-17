@@ -2,10 +2,10 @@ mod inner;
 
 use crate::errors::NoSolutionFound;
 use crate::sudoku::{Board, Row};
-use arrayvec::ArrayVec;
 use rand::{RngExt, SeedableRng, distr::Uniform};
 use rand_pcg::Pcg64Mcg;
 use rayon::prelude::*;
+use std::array;
 
 pub const MAX_POPULATION: usize = 100_000;
 
@@ -81,34 +81,21 @@ impl GAParams {
 ///
 /// # Panics
 ///
-/// Potentially panics if intermediate vectors cannot be converted to fixed
-/// sized arrays.
+/// Panics if the board size, N, exceeds 255.
 #[inline]
 #[must_use]
 pub fn generate_initial_population<const N: usize>(params: &GAParams) -> Vec<Board<N>> {
     let max_digit = u8::try_from(N).expect("digit size exceeds 255");
     let values_range = Uniform::new_inclusive(1, max_digit).expect("invalid value range");
-    let mut boards: Vec<Board<N>> = Vec::with_capacity(params.population);
+    let mut rng = Pcg64Mcg::from_rng(&mut rand::rng());
 
-    for _ in 0..params.population {
-        let mut board: ArrayVec<Row<N>, N> = ArrayVec::new_const();
-
-        for _ in 0..N {
-            let mut row: ArrayVec<u8, N> = ArrayVec::new_const();
-            let rng = Pcg64Mcg::from_rng(&mut rand::rng());
-            let values: Vec<u8> = rng.sample_iter(values_range).take(N).collect();
-
-            for item in &values {
-                row.push(*item);
-            }
-
-            board.push(Row(row.into_inner().unwrap()));
-        }
-
-        boards.push(Board(board.into_inner().unwrap()));
-    }
-
-    boards
+    (0..params.population)
+        .map(|_| {
+            Board(array::from_fn(|_| {
+                Row(array::from_fn(|_| rng.sample(values_range)))
+            }))
+        })
+        .collect()
 }
 
 /// Runs the simulation.
