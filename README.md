@@ -20,7 +20,11 @@ Options:
           Fraction of population selected [default: 0.5]
   -m, --mutation-rate <MUTATION_RATE>
           Mutation rate as fraction [default: 0.06]
-      --restart <RESTART>
+  -e, --elitism <ELITISM>
+          Number of top individuals carried unchanged into the next generation (0 = disabled) [default: 0]
+  -l, --local-search <LOCAL_SEARCH>
+          Greedy local-search passes applied to each child (0 = disabled) [default: 0]
+  -r, --restart <RESTART>
           Number of generations without improvement before restarting with a new random population (0 = disabled) [default: 0]
   -h, --help
           Print help
@@ -39,10 +43,30 @@ the parameters used in running the genetic algorithm described below. There are
 sensible defaults for all of these. Note that the "fraction" arguments expect a
 floating-point number between 0.0 and 1.0.
 
+The optional `--elitism` argument specifies how many of the fittest individuals
+are carried unchanged into the next generation, guaranteeing the best solution
+found so far is never lost to crossover or mutation. It is disabled by default.
+On its own it can accelerate premature convergence on easy boards, so it is most
+useful in combination with `--local-search` and `--restart` (see below).
+
+The optional `--local-search` argument enables a memetic (hybrid) refinement
+step: after each child is bred, the given number of greedy hill-climb passes set
+every non-fixed cell to the digit that minimizes its local conflicts. This helps
+the algorithm make the final descent to a solution on hard puzzles, at the cost
+of fewer generations per second. It is disabled by default.
+
 The optional `--restart` argument specifies the number of generations without
 an improvement in the best fitness score before the population is discarded
 and regenerated from scratch. This can help escape local optima on harder
 puzzles. It is disabled by default.
+
+Together, these three arguments make the historically hard *Al Escargot* puzzle
+solvable in a couple of seconds, where the base genetic algorithm never solves
+it:
+
+```bash
+genetic-sudoku -p 1000 -s 0.4 -m 0.05 --elitism 2 --local-search 2 --restart 50 boards/al-escargot.txt
+```
 
 ## How It Works
 
@@ -64,6 +88,10 @@ puzzles. It is disabled by default.
       by `--mutation-rate` to randomly "mutate" and generate a whole new value
     * If the value is not mutated, there is a 50% chance to "inherit" the value
       from one parent and a 50% chance to "inherit" from the other parent
+    * If `--local-search` is enabled, greedily refine each child by setting its
+      non-fixed cells to the digits that minimize their local conflicts
+  * Carry the fittest `--elitism` individuals into the next generation unchanged
+    so the best solution found is never lost
 * Loop this process until a valid solution is found
 
 ## Acknowledgements
@@ -80,3 +108,22 @@ Made available [here](http://lipas.uwasa.fi/~timan/sudoku/).
 Thanks much to the authors for collecting these.
 
 The [Al Escargot](https://www.sudokuwiki.org/Escargot) board is by Arto Inkala.
+
+### References
+
+The elitism and local-search (memetic) enhancements were motivated by the
+following research on genetic algorithms for Sudoku:
+
+* Mantere, Timo and Janne Koljonen (2007). *Solving, rating and generating
+  Sudoku puzzles with GA.* IEEE Congress on Evolutionary Computation (CEC 2007),
+  pages 1382-1389.
+  <https://www.researchgate.net/publication/224301656_Solving_rating_and_generating_Sudoku_puzzles_with_GA>
+* Deng, Xiu Qin and Yong Da Li (2013). *A novel hybrid genetic algorithm for
+  solving Sudoku puzzles.* Optimization Letters, 7(2), pages 241-257.
+  <https://www.math.uci.edu/~brusso/DengLiOptLett2013.pdf>
+* Sato, Yuji and Hazuki Inoue (2010). *Solving Sudoku with genetic operations
+  that preserve building blocks.* IEEE Conference on Computational Intelligence
+  and Games (CIG 2010). <https://ieeexplore.ieee.org/document/5593375/>
+* Segura, Carlos et al. (2018). *Solving Sudoku's by Evolutionary Algorithms
+  with Pre-processing.* In Studies in Computational Intelligence.
+  <https://link.springer.com/chapter/10.1007/978-3-319-97888-8_1>

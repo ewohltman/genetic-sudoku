@@ -12,7 +12,7 @@ use std::path::Path;
 /// # Panics
 ///
 /// Panics if `n` is not a perfect square.
-const fn box_size(n: usize) -> usize {
+pub(crate) const fn box_size(n: usize) -> usize {
     let box_size = n.isqrt();
 
     assert!(

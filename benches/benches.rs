@@ -15,6 +15,10 @@ const SELECTION_RATE: f32 = 0.5;
 
 const MUTATION_RATE: f32 = 0.05;
 
+const ELITISM: usize = 0;
+
+const LOCAL_SEARCH_PASSES: usize = 0;
+
 fn bench_board_fitness(c: &mut Criterion) {
     const FITNESS_BOARD: Board<BOARD_SIZE_9> = Board([
         Row([9, 9, 9, 9, 9, 9, 9, 9, 9]),
@@ -34,7 +38,13 @@ fn bench_board_fitness(c: &mut Criterion) {
 }
 
 fn bench_generate_initial_population(c: &mut Criterion) {
-    let params = GAParams::new(POPULATION, SELECTION_RATE, MUTATION_RATE);
+    let params = GAParams::new(
+        POPULATION,
+        SELECTION_RATE,
+        MUTATION_RATE,
+        ELITISM,
+        LOCAL_SEARCH_PASSES,
+    );
 
     c.bench_function("generate_initial_population", |b| {
         b.iter(|| genetics::generate_initial_population::<BOARD_SIZE_9>(&params));
@@ -51,7 +61,13 @@ fn bench_run_simulation(c: &mut Criterion) {
         Row([4, 3, 0, 0]),
     ]);
 
-    let params = GAParams::new(POPULATION, SELECTION_RATE, MUTATION_RATE);
+    let params = GAParams::new(
+        POPULATION,
+        SELECTION_RATE,
+        MUTATION_RATE,
+        ELITISM,
+        LOCAL_SEARCH_PASSES,
+    );
     let population = genetics::generate_initial_population::<BOARD_SIZE_4>(&params);
 
     c.bench_function("run_simulation", |b| {

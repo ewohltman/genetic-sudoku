@@ -50,6 +50,23 @@ struct Args {
     mutation_rate: f32,
 
     #[arg(
+        short,
+        long,
+        default_value_t = 0,
+        help = "Number of top individuals carried unchanged into the next generation (0 = disabled)"
+    )]
+    elitism: usize,
+
+    #[arg(
+        short,
+        long,
+        default_value_t = 0,
+        help = "Greedy local-search passes applied to each child (0 = disabled)"
+    )]
+    local_search: usize,
+
+    #[arg(
+        short,
         long,
         default_value_t = 0,
         help = "Number of generations without improvement before restarting with a new random population (0 = disabled)"
@@ -114,7 +131,13 @@ fn main() -> Result<()> {
 fn run(args: Args, terminal: &mut DefaultTerminal) -> Result<()> {
     let start = Instant::now();
     let board = sudoku::Board::read(args.board_path)?;
-    let params = genetics::GAParams::new(args.population, args.selection_rate, args.mutation_rate);
+    let params = genetics::GAParams::new(
+        args.population,
+        args.selection_rate,
+        args.mutation_rate,
+        args.elitism,
+        args.local_search,
+    );
     let quit = AtomicBool::new(false);
     let (tx, rx) = sync_channel::<Snapshot>(1);
 

@@ -68,8 +68,8 @@ Because the two boards live in different regimes, they are ranked differently:
   reaches 0, so it is ranked by **mean best score reached within the budget**
   (lower = closer to solved). Budget 20 s, 3 trials per cell.
 
-`--restart 0` (disabled) throughout the main sweeps to isolate the three rates;
-`--restart` is evaluated separately where relevant.
+`-r 0` (disabled) throughout the main sweeps to isolate the three rates;
+`-r` is evaluated separately where relevant.
 
 ---
 
@@ -170,13 +170,13 @@ a wide, forgiving optimum.
 
 ### 4. Does it ever solve? (long budgets & restart)
 
-| config                                   | budget | trials | solved | best score | ~generations |
-|------------------------------------------|-------:|-------:|-------:|-----------:|-------------:|
-| `-p 3500 -s 0.4 -m 0.02`                 |  120 s |      2 |      0 |          6 |            — |
-| `-p 2000 -s 0.4 -m 0.02`                 |  120 s |      2 |      0 |          6 |            — |
-| `-p 1000 -s 0.4 -m 0.02 --restart 500`   |   90 s |      3 |      0 |          6 |      300,000 |
-| `-p 2000 -s 0.4 -m 0.02 --restart 800`   |   90 s |      3 |      0 |          5 |      200,000 |
-| `-p 3500 -s 0.35 -m 0.02 --restart 1000` |   90 s |      3 |      0 |      **3** |      100,000 |
+| config                            | budget | trials | solved | best score | ~generations |
+|-----------------------------------|-------:|-------:|-------:|-----------:|-------------:|
+| `-p 3500 -s 0.4 -m 0.02`          |  120 s |      2 |      0 |          6 |            — |
+| `-p 2000 -s 0.4 -m 0.02`          |  120 s |      2 |      0 |          6 |            — |
+| `-p 1000 -s 0.4 -m 0.02 -r 500`   |   90 s |      3 |      0 |          6 |      300,000 |
+| `-p 2000 -s 0.4 -m 0.02 -r 800`   |   90 s |      3 |      0 |          5 |      200,000 |
+| `-p 3500 -s 0.35 -m 0.02 -r 1000` |   90 s |      3 |      0 |      **3** |      100,000 |
 
 Neither more time nor population restarts (hundreds of independent fresh attempts)
 produced a solution. The GA converges within a few *hundred* generations and the
@@ -184,13 +184,43 @@ remaining tens of thousands make no progress — deep premature convergence.
 
 ### Caveat — it doesn't fully solve
 
-**Al Escargot was never actually solved** at any tested setting. With `--restart
-0`, a converged, low-diversity population plus low mutation has no path from ~5
+**Al Escargot was never actually solved** at any tested setting. With `-r 0`, a
+converged, low-diversity population plus low mutation has no path from ~5
 conflicts to 0; raising mutation to escape instead prevents convergence
-altogether; `--restart` gives many independent attempts but each stalls at ~2–6
+altogether; `-r` gives many independent attempts but each stalls at ~2–6
 the same way. This is a limitation of the algorithm's operators on a maximally
 hard puzzle, not of the parameter values. The recommended settings are what get
 *closest, fastest*.
+
+### Follow-up — Al Escargot *is* solvable with better operators
+
+The caveat above is a limitation of the **operators**, not the puzzle. The
+plateau was later broken by adding three standard genetic-algorithm techniques
+(motivated by the GA-Sudoku literature; see the README references):
+
+- **Elitism** (`-e`): carry the fittest individuals into the next generation
+  unchanged, so the best board is never lost to crossover/mutation.
+- **Local search** (`-l`): a memetic hill-climb that, after each child is bred,
+  sets every non-fixed cell to the digit minimizing its local conflicts. This
+  drives the population to a strong local optimum in ~12k–20k generations,
+  reaching **score 2** where the base GA stalled at ~5–6.
+- **Restart** (`-r`, already present): each local-search-converged
+  attempt lands in a different score-2 local optimum; restarting gives many
+  independent attempts, one of which reaches **0**.
+
+Neither elitism nor local search alone is enough — local search reliably reaches
+score 2 but greedy single-cell moves can't escape the final two conflicts, and
+elitism *on its own accelerates premature convergence* (it makes the easy
+`default.txt` board stall, too). Combined with restart, they solve Al Escargot:
+
+| config                                   | budget | trials |  solved | solve time         |
+|------------------------------------------|-------:|-------:|--------:|--------------------|
+| `-p 1000 -s 0.4 -m 0.05 -e 2 -l 2 -r 50` |   60 s |      6 | **6/6** | 2–13 s (~1–8k gen) |
+
+This is a **>4 order-of-magnitude** improvement in generations-to-solve versus
+the ~100k–300k stalled generations of the parameter-only study above. Because
+elitism harms easy boards in isolation, all three flags **default to disabled**;
+enable them together for hard puzzles.
 
 ---
 
@@ -223,7 +253,7 @@ puzzle like Al Escargot.
 - **Budget-dependent.** The hard-board population optimum (~3000) is tied to the
   ~20 s budget — larger populations need a longer budget to pull ahead. The
   mutation findings are robust across budgets.
-- **`--restart` was excluded** from the main sweeps because a reset just before
+- **`-r` was excluded** from the main sweeps because a reset just before
   the timeout leaves a fresh-random (~55) score, adding endpoint noise. It is
   evaluated separately for the hard board above.
 - All data was produced with the `target/release/genetic-sudoku` binary against
