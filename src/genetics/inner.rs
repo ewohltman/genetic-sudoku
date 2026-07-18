@@ -67,10 +67,15 @@ fn make_children<const N: usize>(
                     let Row(x_values) = parent_x[i];
                     let Row(y_values) = parent_y[i];
 
+                    // One draw supplies the row's inheritance coin flips: bit j
+                    // chooses which parent column j comes from (N ≤ 64, as
+                    // Scorer's u64 bitmask already requires).
+                    let inherit: u64 = rng.random();
+
                     Row(array::from_fn(|j| {
                         if rng.random_bool(mutation_rate) {
                             rng.sample(values_range)
-                        } else if rng.random_bool(0.5) {
+                        } else if (inherit >> j) & 1 == 1 {
                             x_values[j]
                         } else {
                             y_values[j]
@@ -107,6 +112,9 @@ fn local_search<const N: usize>(
 ) {
     let max_digit = u8::try_from(N).expect("digit size exceeds 255");
 
+    // Bits 1..=N: the candidate digits.
+    let digits_mask: u64 = ((1 << N) - 1) << 1;
+
     for _ in 0..passes {
         for i in 0..N {
             for j in 0..N {
@@ -114,24 +122,32 @@ fn local_search<const N: usize>(
                     continue; // Fixed cell: leave the given value untouched.
                 }
 
+                let (row, column, sub_box) = conflict_masks::<N>(board, i, j);
+
+                // Digits absent from all three groups have zero marginal cost
+                // — the minimum possible. Pick one uniformly at random to keep
+                // the tie-break unbiased.
+                let zero_cost = !(row | column | sub_box) & digits_mask;
+
+                if zero_cost != 0 {
+                    let nth = rng.random_range(0..zero_cost.count_ones());
+
+                    board.0[i].0[j] = nth_set_bit(zero_cost, nth);
+                    continue;
+                }
+
                 let mut best_digit = board.0[i].0[j];
-                let mut best_conflicts = u16::MAX;
+                let mut best_cost = u16::MAX;
                 let mut ties = 0u32;
 
                 for digit in 1..=max_digit {
-                    let conflicts = cell_conflicts::<N>(board, i, j, digit);
+                    let cost = mask_cost(row, column, sub_box, digit);
 
-                    if conflicts < best_conflicts {
-                        best_conflicts = conflicts;
+                    if cost < best_cost {
+                        best_cost = cost;
                         best_digit = digit;
                         ties = 1;
-
-                        // 0 is the minimum possible cost, so no later digit can
-                        // beat it — stop scanning this cell.
-                        if best_conflicts == 0 {
-                            break;
-                        }
-                    } else if conflicts == best_conflicts {
+                    } else if cost == best_cost {
                         ties += 1;
 
                         // Reservoir sampling: keep each tied digit with equal
@@ -148,32 +164,73 @@ fn local_search<const N: usize>(
     }
 }
 
-/// Returns the marginal fitness cost of placing `digit` at `(i, j)`: one point
-/// for each of the row, column, and box that already contains `digit` in
-/// another cell.
+/// Returns the position of the `n`th (0-indexed) set bit in `mask`.
+///
+/// # Panics
+///
+/// Panics if `mask` has fewer than `n + 1` set bits.
+fn nth_set_bit(mut mask: u64, n: u32) -> u8 {
+    for _ in 0..n {
+        mask &= mask - 1; // Clear the lowest set bit.
+    }
+
+    assert!(mask != 0, "mask has fewer than n + 1 set bits");
+
+    u8::try_from(mask.trailing_zeros()).expect("bit position exceeds 255")
+}
+
+/// Returns bitmasks of the digits present in the row, column, and box of
+/// `(i, j)`, excluding the cell itself (bit `d` set = digit `d` present).
+///
+/// Built once per cell, they make the marginal cost of any candidate digit an
+/// O(1) lookup via [`mask_cost`] instead of an O(N) scan per digit.
+fn conflict_masks<const N: usize>(board: &Board<N>, i: usize, j: usize) -> (u64, u64, u64) {
+    let box_size = box_size(N);
+    let mut row: u64 = 0;
+    let mut column: u64 = 0;
+    let mut sub_box: u64 = 0;
+
+    for k in 0..N {
+        if k != j {
+            row |= 1 << board.0[i].0[k];
+        }
+
+        if k != i {
+            column |= 1 << board.0[k].0[j];
+        }
+    }
+
+    let box_row = (i / box_size) * box_size;
+    let box_col = (j / box_size) * box_size;
+
+    for r in box_row..box_row + box_size {
+        for c in box_col..box_col + box_size {
+            if r != i || c != j {
+                sub_box |= 1 << board.0[r].0[c];
+            }
+        }
+    }
+
+    (row, column, sub_box)
+}
+
+/// Returns the marginal fitness cost of placing `digit` in a cell whose group
+/// occupancy is described by the [`conflict_masks`] `row`, `column`, and
+/// `sub_box`: one point for each group that already contains `digit`.
 ///
 /// This mirrors [`Board::fitness`](crate::sudoku::Board)'s per-group duplicate
 /// count (each group contributes at most one duplicate for `digit` when the
 /// cell is added), so greedily minimizing it over a single cell can never
 /// increase the board's overall fitness.
-fn cell_conflicts<const N: usize>(board: &Board<N>, i: usize, j: usize, digit: u8) -> u16 {
-    let box_size = box_size(N);
-
-    let row_conflict = (0..N).any(|k| k != j && board.0[i].0[k] == digit);
-    let col_conflict = (0..N).any(|k| k != i && board.0[k].0[j] == digit);
-
-    let box_row = (i / box_size) * box_size;
-    let box_col = (j / box_size) * box_size;
-    let box_conflict = (box_row..box_row + box_size).any(|r| {
-        (box_col..box_col + box_size).any(|c| (r != i || c != j) && board.0[r].0[c] == digit)
-    });
-
-    u16::from(row_conflict) + u16::from(col_conflict) + u16::from(box_conflict)
+fn mask_cost(row: u64, column: u64, sub_box: u64, digit: u8) -> u16 {
+    u16::from((row >> digit) & 1 != 0)
+        + u16::from((column >> digit) & 1 != 0)
+        + u16::from((sub_box >> digit) & 1 != 0)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{cell_conflicts, local_search, next_generation};
+    use super::{conflict_masks, local_search, mask_cost, next_generation, nth_set_bit};
     use crate::genetics::GAParams;
     use crate::sudoku::{Board, Row};
     use rand::SeedableRng;
@@ -263,7 +320,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cell_conflicts_marginal_cost() {
+    fn test_conflict_masks_marginal_cost() {
         // Placing `1` at (0, 1): row already has a 1 at (0, 0), the box shares
         // that same 1, and the column has no 1 -> row + box = 2.
         let board = Board([
@@ -273,7 +330,20 @@ mod tests {
             Row([4, 0, 0, 1]),
         ]);
 
-        assert_eq!(cell_conflicts::<4>(&board, 0, 1, 1), 2);
-        assert_eq!(cell_conflicts::<4>(&board, 0, 1, 2), 0);
+        let (row, column, sub_box) = conflict_masks::<4>(&board, 0, 1);
+
+        assert_eq!(mask_cost(row, column, sub_box, 1), 2);
+        assert_eq!(mask_cost(row, column, sub_box, 2), 0);
+        // Placing `4` at (0, 1): row has a 4 at (0, 3) -> row only = 1.
+        assert_eq!(mask_cost(row, column, sub_box, 4), 1);
+    }
+
+    #[test]
+    fn test_nth_set_bit() {
+        // 0b1010_0110: set bits at positions 1, 2, 5, 7.
+        assert_eq!(nth_set_bit(0b1010_0110, 0), 1);
+        assert_eq!(nth_set_bit(0b1010_0110, 1), 2);
+        assert_eq!(nth_set_bit(0b1010_0110, 2), 5);
+        assert_eq!(nth_set_bit(0b1010_0110, 3), 7);
     }
 }

@@ -101,12 +101,17 @@ impl<const N: usize> Board<N> {
     }
 
     /// Calculates the fitness of the given board.
+    ///
+    /// Sums the duplicate counts of every row, column, and box. A fitness of
+    /// 0 means the board is solved.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the size of the Board, N, is not a perfect square.
     #[inline]
     #[must_use]
     pub fn fitness(&self) -> u16 {
-        self.count_row_duplicates()
-            + self.transpose().count_row_duplicates()
-            + self.count_box_duplicates()
+        self.count_row_duplicates() + self.count_column_duplicates() + self.count_box_duplicates()
     }
 
     /// Overlays the given `overlay` on top of `self`.
@@ -137,7 +142,7 @@ impl<const N: usize> Board<N> {
 
     #[inline]
     #[must_use]
-    pub(crate) fn count_row_duplicates(&self) -> u16 {
+    fn count_row_duplicates(&self) -> u16 {
         let mut total_duplicates: u16 = 0;
 
         for row in &self.0 {
@@ -145,6 +150,28 @@ impl<const N: usize> Board<N> {
 
             for value in &row.0 {
                 scorer.check(*value);
+            }
+
+            total_duplicates += u16::from(scorer.score());
+        }
+
+        total_duplicates
+    }
+
+    /// Counts column duplicates.
+    ///
+    /// Scans each column in place (strided reads), avoiding the board copy a
+    /// transpose would incur.
+    #[inline]
+    #[must_use]
+    fn count_column_duplicates(&self) -> u16 {
+        let mut total_duplicates: u16 = 0;
+
+        for j in 0..N {
+            let mut scorer = Scorer::default();
+
+            for row in &self.0 {
+                scorer.check(row.0[j]);
             }
 
             total_duplicates += u16::from(scorer.score());
@@ -162,7 +189,7 @@ impl<const N: usize> Board<N> {
     /// Panics if the size of the Board, N, is not a perfect square.
     #[inline]
     #[must_use]
-    pub(crate) fn count_box_duplicates(&self) -> u16 {
+    fn count_box_duplicates(&self) -> u16 {
         let box_size = box_size(N);
 
         let mut total_duplicates: u16 = 0;
@@ -182,18 +209,6 @@ impl<const N: usize> Board<N> {
         }
 
         total_duplicates
-    }
-
-    fn transpose(&self) -> Self {
-        let mut transposed: [Row<N>; N] = [Row::default(); N];
-
-        for i in 0..N {
-            for (j, row) in transposed.iter_mut().enumerate().take(N) {
-                row.0[i] = self.0[i].0[j];
-            }
-        }
-
-        Self(transposed)
     }
 }
 
@@ -260,13 +275,6 @@ mod tests {
         Row([2, 1, 4, 3]),
     ]);
 
-    const GOOD_BOARD_TRANSPOSED: Board<4> = Board([
-        Row([1, 3, 4, 2]),
-        Row([2, 4, 3, 1]),
-        Row([3, 1, 2, 4]),
-        Row([4, 2, 1, 3]),
-    ]);
-
     const BAD_BOARD: Board<4> = Board([
         Row([1, 2, 3, 4]),
         Row([1, 2, 3, 4]),
@@ -329,11 +337,6 @@ mod tests {
     fn test_board_fitness() {
         assert_eq!(0, GOOD_BOARD.fitness());
         assert_eq!(20, BAD_BOARD.fitness());
-    }
-
-    #[test]
-    fn test_board_transpose() {
-        assert_eq!(GOOD_BOARD_TRANSPOSED, GOOD_BOARD.transpose());
     }
 
     #[test]
