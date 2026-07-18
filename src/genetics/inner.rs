@@ -125,12 +125,18 @@ fn local_search<const N: usize>(
                         best_conflicts = conflicts;
                         best_digit = digit;
                         ties = 1;
+
+                        // 0 is the minimum possible cost, so no later digit can
+                        // beat it — stop scanning this cell.
+                        if best_conflicts == 0 {
+                            break;
+                        }
                     } else if conflicts == best_conflicts {
                         ties += 1;
 
                         // Reservoir sampling: keep each tied digit with equal
                         // probability without collecting them.
-                        if rng.random_bool(1.0 / f64::from(ties)) {
+                        if rng.random_range(0..ties) == 0 {
                             best_digit = digit;
                         }
                     }
