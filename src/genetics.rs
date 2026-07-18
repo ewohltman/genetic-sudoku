@@ -14,6 +14,8 @@ pub struct GAParams {
     num_survivors: usize,
     num_children_per_parent_pairs: usize,
     mutation_rate: f32,
+    elitism: usize,
+    local_search_passes: usize,
 }
 
 impl GAParams {
@@ -24,16 +26,26 @@ impl GAParams {
     /// * `population` - the size of the population to use
     /// * `selection_rate` - the fraction of survivors per generation
     /// * `mutation_rate` - the rate at which values should mutate
+    /// * `elitism` - the number of top individuals carried unchanged into the
+    ///   next generation (0 = disabled)
+    /// * `local_search_passes` - the number of greedy hill-climb passes applied
+    ///   to each child (0 = disabled)
     ///
     /// # Panics
     ///
     /// Panics if the given population is greater than `MAX_POPULATION`, if
     /// `selection_rate` is not in `(0.0, 1.0]`, if `mutation_rate` is not in
-    /// `[0.0, 1.0]`, or if `population * selection_rate` yields fewer than
-    /// two survivors.
+    /// `[0.0, 1.0]`, if `population * selection_rate` yields fewer than two
+    /// survivors, or if `elitism` is not less than `population`.
     #[inline]
     #[must_use]
-    pub fn new(population: usize, selection_rate: f32, mutation_rate: f32) -> Self {
+    pub fn new(
+        population: usize,
+        selection_rate: f32,
+        mutation_rate: f32,
+        elitism: usize,
+        local_search_passes: usize,
+    ) -> Self {
         assert!(
             population <= MAX_POPULATION,
             "population must not exceed {MAX_POPULATION}"
@@ -46,6 +58,7 @@ impl GAParams {
             (0.0..=1.0).contains(&mutation_rate),
             "mutation_rate must be in [0.0, 1.0]"
         );
+        assert!(elitism < population, "elitism must be less than population");
 
         #[allow(
             clippy::cast_sign_loss,
@@ -67,6 +80,8 @@ impl GAParams {
             num_survivors,
             num_children_per_parent_pairs,
             mutation_rate,
+            elitism,
+            local_search_passes,
         }
     }
 }
@@ -150,6 +165,6 @@ pub fn run_simulation<const N: usize>(
     Err(NoSolutionFound {
         best_board,
         best_score,
-        next_generation: inner::next_generation::<N>(params, population_scores),
+        next_generation: inner::next_generation::<N>(params, base, population_scores),
     })
 }
